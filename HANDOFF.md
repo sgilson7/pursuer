@@ -24,7 +24,7 @@
 
 ## Not done, or done differently
 
-- The Hanging Tree (sped up, from 0:54.85) is the default in a local build. It is kept out of the repository, so the deployed game plays the chiptune (SECOND-ORDER M1, M6).
+- The Hanging Tree (sped up, from 0:54.85) is the default chase music, deployed with the game at Sam's decision (SECOND-ORDER M6, T5).
 - Six pursuers are original characters; Kanye West is Sam's addition, from a photograph (M2, M7).
 - No river: the overpass is the bridge (M5).
 - Frame rates on integrated Intel or AMD graphics, and in Firefox and Safari, were not measured.

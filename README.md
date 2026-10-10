@@ -59,7 +59,7 @@ A push to `main` runs the same check in Chromium and deploys `dist/` to GitHub P
 
 The record player on the cabinet by the kitchen picks the chase music: press E at it to step through the records, and the song's name floats over it. The records are listed in `data/music.json`. *The Hanging Tree* (sped up) is first and plays from 0:54.85, where "are you, are you" comes in, and loops back there. The original chiptune is second.
 
-The Hanging Tree recording lives at `web/music/the-hanging-tree-sped-up.mp3` and is kept out of the repository by `.gitignore`, since it is a commercial recording and not Sam's to publish. A local build plays it. The deployed build does not have it, so `scripts/build.sh` marks it absent there and the record player offers only the chiptune.
+The Hanging Tree recording is at `web/music/the-hanging-tree-sped-up.mp3`. It is a commercial recording that Sam chose to publish with the game; see `LICENSES.md`. If a build lacks the file, `scripts/build.sh` marks it absent and the record player offers only the chiptune.
 
 ## Credits
 

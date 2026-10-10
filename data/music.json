@@ -1,5 +1,5 @@
 {
- "_about": "The chase music, chosen on the record player in the house. `tracks` are the records in the order the player steps through them; the first one present is the default. A track with a `file` (a recording under web/) plays from `start` seconds at `rate` times speed and loops back to `start`; one with `file` null is the original tune below, synthesized: `notes` are [frequency in Hz (0 a rest), seconds], under a drone of `drone` Hz. scripts/build.sh sets `present` false on a track whose file is not in the build, and the record player skips it. The Hanging Tree recording is kept out of the public repository (.gitignore, SECOND-ORDER M1).",
+ "_about": "The chase music, chosen on the record player in the house. `tracks` are the records in the order the player steps through them; the first one present is the default. A track with a `file` (a recording under web/) plays from `start` seconds at `rate` times speed and loops back to `start`; one with `file` null is the original tune below, synthesized: `notes` are [frequency in Hz (0 a rest), seconds], under a drone of `drone` Hz. scripts/build.sh sets `present` false on a track whose file is not in the build, and the record player skips it. The Hanging Tree recording is published with the game at Sam's decision (SECOND-ORDER T5).",
  "tracks": [
   {
    "id": "hanging_tree",
