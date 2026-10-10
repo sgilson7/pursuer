@@ -14,5 +14,8 @@
   "KeyE": "use",
   "Mouse0": "use",
   "ShiftLeft": "shift",
-  "ShiftRight": "shift"
+  "ShiftRight": "shift",
+  "KeyC": "dash",
+  "KeyX": "spin",
+  "KeyV": "nitrous"
 }

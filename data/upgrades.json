@@ -1,12 +1,16 @@
 {
-  "_about": "What the car gains as you survive. `at` is seconds since the pursuer stood up. `id` is the rule in crates/core/src/car.rs (Kit) it switches on; `name` and `text` are what the player reads when it arrives.",
-  "upgrades": [
-    { "id": "flip", "at": 0, "name": "Roll over", "text": "Hold R to roll the car back onto its wheels.", "key": "R" },
-    { "id": "big_wheels", "at": 25, "name": "Big wheels", "text": "Q: eight seconds on wheels tall enough to drive over a fallen building.", "key": "Q" },
-    { "id": "hover", "at": 55, "name": "Hover", "text": "Space: float over the rubble for 3 seconds.", "key": "Space" },
-    { "id": "turbo", "at": 85, "name": "Turbo", "text": "A faster top speed.", "key": "" },
-    { "id": "wings", "at": 120, "name": "Wings", "text": "F: fly for 5 seconds. W dives, S climbs, A and D bank.", "key": "F" },
-    { "id": "turbo", "at": 170, "name": "Turbo II", "text": "Faster still.", "key": "" },
-    { "id": "turbo", "at": 240, "name": "Turbo III", "text": "As fast as it goes.", "key": "" }
+  "_about": "What the car gains as you survive. `start` is the car's own, told when you first get in. At each time in `at` (seconds since the pursuer stood up) the core draws one of `pool` at random that the car does not have yet; entries that share an `id` (the turbos) come in the order listed. `id` is the rule in crates/core/src/car.rs (Kit) it switches on; `name` and `text` are what the player reads when it arrives.",
+  "start": { "id": "flip", "name": "Roll over", "text": "Hold R to roll the car back onto its wheels." },
+  "at": [25, 55, 85, 120, 170, 240, 320],
+  "pool": [
+    { "id": "big_wheels", "name": "Big wheels", "text": "Q: eight seconds on wheels tall enough to drive over a fallen building." },
+    { "id": "wings", "name": "Wings", "text": "F: fly for 5 seconds. W dives, S climbs, A and D bank." },
+    { "id": "dash", "name": "Dash", "text": "C: a kick toward whichever way W A S D point. Works in the air." },
+    { "id": "spin", "name": "Instant turn", "text": "X: swing straight round, speed and all. Hold A or D for a quarter turn." },
+    { "id": "nitrous", "name": "Nitrous", "text": "V: four seconds of rocket on loose tyres. Good luck steering." },
+    { "id": "leap", "name": "Leap", "text": "Space: jump the car about six metres up." },
+    { "id": "turbo", "name": "Turbo", "text": "A faster top speed." },
+    { "id": "turbo", "name": "Turbo II", "text": "Faster still." },
+    { "id": "turbo", "name": "Turbo III", "text": "As fast as it goes." }
   ]
 }

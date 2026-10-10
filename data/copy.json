@@ -28,16 +28,21 @@
  "prompt_run": "Run to the car in the garage",
  "prompt_record": "Press E to change the record",
  "flip_hint": "Upside down? Hold R to roll over.",
- "next_label": "Next:",
- "next_in": "in",
- "ability_hover": "Hover",
+ "next_label": "A new ability in",
  "ability_wings": "Wings",
  "ability_flip": "Roll over",
  "ability_big_wheels": "Big wheels",
- "key_hover": "Space",
+ "ability_dash": "Dash",
+ "ability_spin": "Instant turn",
+ "ability_nitrous": "Nitrous",
+ "ability_leap": "Leap",
  "key_wings": "F",
  "key_flip": "R",
  "key_big_wheels": "Q",
+ "key_dash": "C",
+ "key_spin": "X",
+ "key_nitrous": "V",
+ "key_leap": "Space",
  "no_webgl": "This browser cannot draw WebGL 2, which Pursuer needs.",
  "controls": [
   [
@@ -62,15 +67,11 @@
   ],
   [
    "Space",
-   "Jump, or hover once the car can"
+   "Jump; in the car, leap once it can"
   ],
   [
-   "Q",
-   "Big wheels, once the car has them"
-  ],
-  [
-   "F",
-   "Fly, once the car can"
+   "Q, F, C, X, V",
+   "The car's other abilities, drawn at random as you survive: each shows its key on the left"
   ],
   [
    "Esc",

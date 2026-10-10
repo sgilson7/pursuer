@@ -44,6 +44,9 @@ pub const SHIFT: u32 = 256;
 /// set by the page while the game has the pointer
 pub const FOCUS: u32 = 512;
 pub const BIG: u32 = 1024;
+pub const DASH: u32 = 2048;
+pub const SPIN: u32 = 4096;
+pub const NITROUS: u32 = 8192;
 
 const TICK_US: i64 = 1_000_000 / 60;
 const MAX_TICKS_PER_FRAME: i32 = 4;
@@ -66,44 +69,64 @@ pub enum Mode {
     Caught,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct Upgrade {
     pub id: String,
-    pub at: i32,
     pub name: String,
     pub text: String,
 }
 
 #[derive(Deserialize)]
 struct UpgradesFile {
-    upgrades: Vec<UpgradeJson>,
+    start: Upgrade,
+    at: Vec<i32>,
+    pool: Vec<Upgrade>,
 }
 
-#[derive(Deserialize)]
-struct UpgradeJson {
-    id: String,
-    at: i32,
-    name: String,
-    text: String,
+/// The car's abilities: the one it starts with, the times (seconds) a new
+/// one arrives, and the pool each is drawn from.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Upgrades {
+    pub start: Upgrade,
+    pub at: Vec<i32>,
+    pub pool: Vec<Upgrade>,
 }
 
-pub fn parse_upgrades(json: &str) -> Result<Vec<Upgrade>, String> {
+pub fn parse_upgrades(json: &str) -> Result<Upgrades, String> {
     let f: UpgradesFile = serde_json::from_str(json).map_err(|e| format!("upgrades.json: {e}"))?;
-    let known = ["flip", "big_wheels", "hover", "turbo", "wings"];
-    f.upgrades
-        .into_iter()
-        .map(|u| {
-            if !known.contains(&u.id.as_str()) {
-                return Err(format!("upgrades.json: no rule called {}", u.id));
-            }
-            Ok(Upgrade {
-                id: u.id,
-                at: u.at,
-                name: u.name,
-                text: u.text,
-            })
-        })
-        .collect()
+    let known = [
+        "flip",
+        "big_wheels",
+        "turbo",
+        "wings",
+        "dash",
+        "spin",
+        "nitrous",
+        "leap",
+    ];
+    for u in std::iter::once(&f.start).chain(&f.pool) {
+        if !known.contains(&u.id.as_str()) {
+            return Err(format!("upgrades.json: no rule called {}", u.id));
+        }
+    }
+    Ok(Upgrades {
+        start: f.start,
+        at: f.at,
+        pool: f.pool,
+    })
+}
+
+/// The next ability, at random from those in `pool` not yet `drawn`; of
+/// entries that share an id, only the first not yet drawn can come.
+pub fn draw(pool: &[Upgrade], drawn: &[usize], rng: &mut Rng) -> Option<usize> {
+    let open: Vec<usize> = (0..pool.len())
+        .filter(|k| !drawn.contains(k))
+        .filter(|&k| (0..k).all(|j| pool[j].id != pool[k].id || drawn.contains(&j)))
+        .collect();
+    if open.is_empty() {
+        return None;
+    }
+    Some(open[rng.range(0, open.len() as i32 - 1) as usize])
 }
 
 /// A record on the record player: the chase music.
@@ -171,7 +194,11 @@ pub struct Game {
     pal: Palette,
     items: Vec<Item>,
     hold_ticks: i32,
-    upgrades: Vec<Upgrade>,
+    upgrades: Upgrades,
+    /// the pool's abilities drawn so far this chase, in order
+    drawn: Vec<usize>,
+    /// chance for the draws, seeded from the page's clock as the chase starts
+    luck: Rng,
     tracks: Vec<Track>,
     /// the record on the player: the chase music
     song: usize,
@@ -200,7 +227,8 @@ pub struct Game {
     best: u32,
     new_best: bool,
     unlocked: usize,
-    toast: Option<(usize, i32)>,
+    /// the ability to tell of (a pool index, or None for the car's own) and ticks left
+    toast: Option<(Option<usize>, i32)>,
     dust: Vec<Dust>,
     rng: Rng,
     look_yaw: i32,
@@ -290,6 +318,8 @@ impl Game {
             items,
             hold_ticks: hold_seconds * 60,
             upgrades,
+            drawn: Vec::new(),
+            luck: Rng::new(0),
             tracks,
             song,
             song_seq: 0,
@@ -368,6 +398,7 @@ impl Game {
         self.ticks = 0;
         self.new_best = false;
         self.unlocked = 0;
+        self.drawn.clear();
         self.toast = None;
         self.dust.clear();
         self.look_yaw = 0;
@@ -628,6 +659,8 @@ impl Game {
         self.hold = 0;
         self.fold = 0;
         self.mode = Mode::Chase;
+        // the draws differ from chase to chase: the page's clock is the seed
+        self.luck = Rng::new(self.clock.unwrap_or(0) as u64);
         let at = v3(-self.tuning.spawn_distance, 0, 0);
         let mut m = Monster::new(at, 0, self.tuning);
         m.pos.y = self.terrain.height(at.x, at.z);
@@ -643,12 +676,24 @@ impl Game {
                 throttle: axis(FORWARD, BACK),
                 steer: axis(LEFT, RIGHT),
                 handbrake: bit(bits, SHIFT),
-                hover: bit(bits, JUMP),
                 fly: bit(bits, FLY),
                 flip: bit(bits, FLIP),
                 big: bit(bits, BIG),
+                dash: bit(bits, DASH),
+                spin: bit(bits, SPIN),
+                nitrous: bit(bits, NITROUS),
+                leap: bit(bits, JUMP),
             };
+            let quiet = |car: &Car| [car.dash, car.spin_round, car.leap, car.nitrous].map(|ch| ch.left == 0);
+            let before = quiet(&self.car);
             self.car.step(c, &self.terrain, &mut self.city, DT);
+            let now = quiet(&self.car);
+            if (0..3).any(|k| before[k] && !now[k]) {
+                self.sounds.push("whoosh");
+            }
+            if before[3] && !now[3] {
+                self.sounds.push("nitrous");
+            }
             self.look_idle += 1;
             if self.look_idle > 90 {
                 self.look_yaw = fx::approach(self.look_yaw, 0, deg(3));
@@ -658,9 +703,7 @@ impl Game {
             self.driving = true;
             self.look_yaw = 0;
             self.look_pitch = 0;
-            if !self.upgrades.is_empty() && self.upgrades[0].at == 0 {
-                self.toast = Some((0, 60 * 5));
-            }
+            self.toast = Some((None, 60 * 5));
         }
         let target = self.player_pos();
         let heading = if self.driving {
@@ -706,22 +749,27 @@ impl Game {
             let extra = self.dust.len() - 160;
             self.dust.drain(..extra);
         }
-        // abilities, by time survived
-        while self.unlocked < self.upgrades.len() && self.ticks as i32 >= self.upgrades[self.unlocked].at * 60
+        // abilities, drawn at random as time is survived
+        while self.unlocked < self.upgrades.at.len()
+            && self.ticks as i32 >= self.upgrades.at[self.unlocked] * 60
         {
-            let u = &self.upgrades[self.unlocked];
-            match u.id.as_str() {
-                "big_wheels" => self.car.kit.big_wheels = true,
-                "hover" => self.car.kit.hover = true,
-                "wings" => self.car.kit.wings = true,
-                "turbo" => self.car.kit.turbo += 1,
+            self.unlocked += 1;
+            let Some(k) = draw(&self.upgrades.pool, &self.drawn, &mut self.luck) else {
+                continue;
+            };
+            self.drawn.push(k);
+            let kit = &mut self.car.kit;
+            match self.upgrades.pool[k].id.as_str() {
+                "big_wheels" => kit.big_wheels = true,
+                "wings" => kit.wings = true,
+                "turbo" => kit.turbo += 1,
+                "dash" => kit.dash = true,
+                "spin" => kit.spin = true,
+                "nitrous" => kit.nitrous = true,
+                "leap" => kit.leap = true,
                 _ => {}
             }
-            // the first is the car's own: it is told when you get in
-            if u.at > 0 {
-                self.toast = Some((self.unlocked, 60 * 5));
-            }
-            self.unlocked += 1;
+            self.toast = Some((Some(k), 60 * 5));
         }
         if let Some((k, t)) = self.toast {
             self.toast = if t > 1 { Some((k, t - 1)) } else { None };
@@ -1366,45 +1414,33 @@ impl Game {
             0
         };
         let c = &self.car;
-        let ability = |id: &str, have: bool, left: i32, wait: i32, total: i32, recharge: i32| {
-            let (state, level) = if !have {
-                ("locked", 0)
-            } else if left > 0 {
-                ("active", fx::div(left, total))
-            } else if wait > 0 {
-                ("charging", ONE - fx::div(wait, total + recharge))
+        let ability = |id: &str, ch: car::Charge, total: i32, recharge: i32| {
+            let (state, level) = if ch.left > 0 {
+                ("active", fx::div(ch.left, total))
+            } else if ch.wait > 0 {
+                ("charging", ONE - fx::div(ch.wait, total + recharge))
             } else {
                 ("ready", ONE)
             };
             json!({ "id": id, "state": state, "level": pct(level * 100) })
         };
-        let abilities = vec![
-            ability(
-                "hover",
-                c.kit.hover,
-                c.hover_left,
-                c.hover_wait,
-                car::HOVER_TICKS,
-                car::HOVER_RECHARGE,
-            ),
-            ability(
-                "wings",
-                c.kit.wings,
-                c.fly_left,
-                c.fly_wait,
-                car::FLY_TICKS,
-                car::FLY_RECHARGE,
-            ),
+        // the car's own, then the ones it has drawn, in the order they came
+        let mut abilities = vec![
             json!({ "id": "flip", "state": if c.flipping { "active" } else { "ready" }, "level": "100.00%" }),
-            ability(
-                "big_wheels",
-                c.kit.big_wheels,
-                c.big_left,
-                c.big_wait,
-                car::BIG_TICKS,
-                car::BIG_RECHARGE,
-            ),
         ];
+        for &k in &self.drawn {
+            let id = self.upgrades.pool[k].id.as_str();
+            let row = match id {
+                "big_wheels" => ability(id, c.big, car::BIG_TICKS, car::BIG_RECHARGE),
+                "wings" => ability(id, c.fly, car::FLY_TICKS, car::FLY_RECHARGE),
+                "dash" => ability(id, c.dash, car::DASH_TICKS, car::DASH_RECHARGE),
+                "spin" => ability(id, c.spin_round, car::SPIN_TICKS, car::SPIN_RECHARGE),
+                "nitrous" => ability(id, c.nitrous, car::NITROUS_TICKS, car::NITROUS_RECHARGE),
+                "leap" => ability(id, c.leap, car::LEAP_TICKS, car::LEAP_RECHARGE),
+                _ => continue,
+            };
+            abilities.push(row);
+        }
         let mirrors: Vec<serde_json::Value> = self
             .views
             .iter()
@@ -1444,12 +1480,14 @@ impl Game {
             None
         };
         let toast = self.toast.map(|(k, _)| {
-            let u = &self.upgrades[k];
+            let u = k.map(|k| &self.upgrades.pool[k]).unwrap_or(&self.upgrades.start);
             json!({ "name": u.name, "text": u.text })
         });
-        let next = self.upgrades.get(self.unlocked).map(
-            |u| json!({ "name": u.name, "in": clock_text((u.at as u32 * 60).saturating_sub(self.ticks)) }),
-        );
+        // the next is a surprise: only when it comes is shown
+        let next = (self.drawn.len() < self.upgrades.pool.len())
+            .then(|| self.upgrades.at.get(self.unlocked))
+            .flatten()
+            .map(|&at| json!({ "in": clock_text((at as u32 * 60).saturating_sub(self.ticks)) }));
         let chosen = self.chosen.map(|k| &self.items[k]);
         let monster_dist = self
             .monster
@@ -1485,7 +1523,7 @@ impl Game {
             "song_seq": self.song_seq,
             "player_marker": player_marker,
             "flying": c.flying(),
-            "hovering": c.hovering(),
+            "nitrous": c.nitrous.active(),
             "upside_down": c.up().y < ONE / 3 && self.driving,
             "loosed": self.city.stats.loosed,
             "awake": self.city.awake_count(),
@@ -1547,7 +1585,8 @@ pub fn numbers() -> String {
         "uniforms": [["uLightDir", 3], ["uSky", 3], ["uFog", 3], ["uLight", 3], ["uWindowDark", 3], ["uWindowLit", 3], ["uInk", 3], ["uFogRange", 2], ["uInkSize", 3]],
         "actions": {
             "forward": FORWARD, "back": BACK, "left": LEFT, "right": RIGHT, "jump": JUMP, "fly": FLY,
-            "flip": FLIP, "use": USE, "shift": SHIFT, "focus": FOCUS, "big": BIG
+            "flip": FLIP, "use": USE, "shift": SHIFT, "focus": FOCUS, "big": BIG,
+            "dash": DASH, "spin": SPIN, "nitrous": NITROUS
         },
         "terrain_cells": terrain::N,
         "rubble_full": rubble::FULL,
@@ -1670,7 +1709,26 @@ pub(crate) mod tests {
         // Q down and up within one display frame that ran no tick
         g.advance(t + TICK_US / 4, BIG | FOCUS, 0, 0);
         run(&mut g, 0, 2, &mut t);
-        assert!(g.car().big_left > 0, "the big wheels came out");
+        assert!(g.car().big.left > 0, "the big wheels came out");
+    }
+
+    #[test]
+    fn a_dash_whooshes_and_nitrous_roars() {
+        let mut g = game();
+        g.begin();
+        let mut t = 0;
+        run(&mut g, USE, 60 * 6, &mut t);
+        g.walker.pos = g.car.body.pos;
+        run(&mut g, 0, 2, &mut t);
+        run(&mut g, USE, 2, &mut t);
+        g.car.kit.dash = true;
+        g.car.kit.nitrous = true;
+        let heard = |g: &Game| g.sounds.clone();
+        g.advance(t + TICK_US, DASH | FOCUS, 0, 0);
+        t += TICK_US;
+        assert!(heard(&g).contains(&"whoosh"), "{:?}", heard(&g));
+        g.advance(t + TICK_US, NITROUS | FOCUS, 0, 0);
+        assert!(heard(&g).contains(&"nitrous"), "{:?}", heard(&g));
     }
 
     #[test]
@@ -1793,8 +1851,53 @@ pub(crate) mod tests {
             }
             run(&mut g, 0, 1, &mut t);
         }
-        assert!(g.car().kit.big_wheels && g.car().kit.hover);
-        assert!(!g.car().kit.wings);
+        assert_eq!(g.drawn.len(), 2, "one at 25 s and one at 55 s");
+        assert_ne!(g.drawn[0], g.drawn[1]);
+        let kit = g.car().kit;
+        let owned = [
+            kit.big_wheels,
+            kit.wings,
+            kit.dash,
+            kit.spin,
+            kit.nitrous,
+            kit.leap,
+            kit.turbo > 0,
+        ];
+        assert_eq!(owned.iter().filter(|&&o| o).count(), 2, "{kit:?}");
+        let hud: serde_json::Value = serde_json::from_str(&g.hud_json()).unwrap();
+        assert_eq!(
+            hud["abilities"].as_array().unwrap().len(),
+            1 + 2 - kit.turbo as usize
+        );
+    }
+
+    #[test]
+    fn the_draw_never_repeats_and_takes_the_turbos_in_order() {
+        let pool = parse_upgrades(include_str!("../../../data/upgrades.json"))
+            .unwrap()
+            .pool;
+        let mut firsts = std::collections::BTreeSet::new();
+        for seed in 0..40 {
+            let mut rng = Rng::new(seed);
+            let mut drawn = Vec::new();
+            while let Some(k) = draw(&pool, &drawn, &mut rng) {
+                assert!(!drawn.contains(&k));
+                let turbos: Vec<&str> = drawn
+                    .iter()
+                    .chain([&k])
+                    .filter(|&&j| pool[j].id == "turbo")
+                    .map(|&j| pool[j].name.as_str())
+                    .collect();
+                assert!(
+                    ["Turbo", "Turbo II", "Turbo III"].starts_with(&turbos),
+                    "{turbos:?}"
+                );
+                drawn.push(k);
+            }
+            assert_eq!(drawn.len(), pool.len(), "all of it, in the end");
+            firsts.insert(drawn[0]);
+        }
+        assert!(firsts.len() > 3, "the first draw varies: {firsts:?}");
     }
 
     #[test]

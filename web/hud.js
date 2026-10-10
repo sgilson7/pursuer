@@ -69,7 +69,14 @@ export function makeHud(copy) {
       el("h-distance").textContent = h.distance;
       el("h-speed").textContent = h.speed;
       for (const a of h.abilities) ability(a);
-      el("h-next").textContent = h.next ? `${copy.next_label} ${h.next.name} ${copy.next_in} ${h.next.in}` : "";
+      // a new chase draws its abilities afresh: drop the rows it lacks
+      for (const [id, r] of rows) {
+        if (!h.abilities.some((a) => a.id === id)) {
+          r.row.remove();
+          rows.delete(id);
+        }
+      }
+      el("h-next").textContent = h.next ? `${copy.next_label} ${h.next.in}` : "";
       placeMirrors(h.mirrors);
       const marker = el("marker");
       marker.hidden = !h.car_marker;

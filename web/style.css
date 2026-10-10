@@ -90,7 +90,6 @@ table.controls td:first-child { font-weight: 700; white-space: nowrap; }
 .ability .name { min-width: 6.5em; }
 .ability .bar { flex: 1; height: 0.6em; border: 2px solid var(--ink); border-radius: 4px; overflow: hidden; background: #fff8ea; }
 .ability .bar i { display: block; height: 100%; background: var(--teal); }
-.ability[data-state="locked"] { opacity: 0.35; }
 .ability[data-state="active"] .bar i { background: var(--gold); }
 .ability[data-state="charging"] .bar i { background: var(--sage); }
 .next { font-size: 0.8rem; margin-top: 0.3em; opacity: 0.8; }

@@ -14,12 +14,14 @@
 //! hard turn leans the car on its outside springs, and too hard a turn at
 //! speed rolls it over.
 //!
-//! Abilities come with survival time (`data/upgrades.json`): big wheels
-//! (eight seconds on stilts, high enough to drive over a fallen building's
-//! blocks), hover (three seconds held above
-//! whatever is below), flight (five seconds as a plane) and turbo. A held
-//! key rolls the car upright, slowly, as Vagrancy's sticky feet stand a body
-//! up. Nothing hurts the car: there is no fall damage.
+//! Abilities come with survival time, drawn at random (`data/upgrades.json`):
+//! big wheels (eight seconds on stilts, high enough to drive over a fallen
+//! building's blocks), flight (five seconds as a plane), turbo, a dash in
+//! the steered direction, an instant turn, nitrous (four seconds of a
+//! rocket's push on loose tyres) and a leap. Each runs for a while and then
+//! recharges (`Charge`). A held key rolls the car upright, as Vagrancy's
+//! sticky feet stand a body up. Nothing hurts the car: there is no fall
+//! damage.
 
 use crate::fx::{self, int, ONE};
 use crate::geom::{v3, V3};
@@ -89,9 +91,12 @@ pub const BASE: Tune = Tune {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Kit {
     pub big_wheels: bool,
-    pub hover: bool,
     pub wings: bool,
     pub turbo: u8,
+    pub dash: bool,
+    pub spin: bool,
+    pub nitrous: bool,
+    pub leap: bool,
 }
 
 impl Kit {
@@ -118,6 +123,36 @@ impl Kit {
     }
 }
 
+/// An ability's timer: ticks it has left to run, and ticks until it can be
+/// used again (counting the run).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Charge {
+    pub left: i32,
+    pub wait: i32,
+}
+
+impl Charge {
+    /// Starts it, when `go` and it is ready: true when it starts.
+    fn fire(&mut self, go: bool, ticks: i32, recharge: i32) -> bool {
+        if go && self.left == 0 && self.wait == 0 {
+            self.left = ticks;
+            self.wait = ticks + recharge;
+            true
+        } else {
+            false
+        }
+    }
+
+    fn tick(&mut self) {
+        self.left = (self.left - 1).max(0);
+        self.wait = (self.wait - 1).max(0);
+    }
+
+    pub fn active(&self) -> bool {
+        self.left > 0
+    }
+}
+
 /// The controls the car reads, each tick.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Controls {
@@ -126,18 +161,41 @@ pub struct Controls {
     /// −ONE..ONE: right to left
     pub steer: i32,
     pub handbrake: bool,
-    pub hover: bool,
     pub fly: bool,
     pub flip: bool,
     pub big: bool,
+    pub dash: bool,
+    pub spin: bool,
+    pub nitrous: bool,
+    pub leap: bool,
 }
 
+/// Each ability's run and recharge, in ticks. The instant ones (dash, turn,
+/// leap) run only long enough for the HUD to light up.
 pub const BIG_TICKS: i32 = 8 * 60;
 pub const BIG_RECHARGE: i32 = 10 * 60;
-pub const HOVER_TICKS: i32 = 3 * 60;
-pub const HOVER_RECHARGE: i32 = 7 * 60;
 pub const FLY_TICKS: i32 = 5 * 60;
 pub const FLY_RECHARGE: i32 = 12 * 60;
+pub const DASH_TICKS: i32 = 15;
+pub const DASH_RECHARGE: i32 = 3 * 60;
+pub const SPIN_TICKS: i32 = 15;
+pub const SPIN_RECHARGE: i32 = 5 * 60;
+pub const NITROUS_TICKS: i32 = 4 * 60;
+pub const NITROUS_RECHARGE: i32 = 12 * 60;
+pub const LEAP_TICKS: i32 = 30;
+pub const LEAP_RECHARGE: i32 = 4 * 60;
+/// The dash's kick, m/s, in the steered direction, and a little up.
+const DASH_SPEED: i32 = 24 * ONE;
+const DASH_HOP: i32 = 3 * ONE;
+/// The leap's kick up, m/s: about six metres high.
+const LEAP_SPEED: i32 = 16 * ONE;
+/// Nitrous: a rocket's push along the nose, m/s², which fades to nothing
+/// at `NITROUS_TOP` m/s, and the tyres' grip, in percent, while it burns.
+const NITROUS_PUSH: i32 = 55 * ONE;
+const NITROUS_TOP: i32 = 130 * ONE;
+const NITROUS_GRIP: i32 = 55;
+/// How hard the flip key turns the car's up toward the sky.
+const RIGHTING: i32 = 7 * ONE;
 /// How far the front wheels turn each tick toward where they are steered:
 /// slow enough that a flick of the wheel takes a moment.
 const STEER_RATE: i32 = fx::deg(2);
@@ -149,7 +207,6 @@ const SLIP_STIFFNESS: i32 = 5 * ONE;
 const LEDGE: i32 = 9 * ONE;
 /// How fast, m/s, a big wheel climbs onto something higher.
 const CLIMB: i32 = 8 * ONE;
-const HOVER_HEIGHT: i32 = ONE * 22 / 10;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Car {
@@ -160,13 +217,13 @@ pub struct Car {
     pub travel: [i32; 4],
     pub spin: i32,
     pub grounded: u8,
-    /// ticks of hover and flight left, and ticks until each is ready again
-    pub hover_left: i32,
-    pub hover_wait: i32,
-    pub fly_left: i32,
-    pub fly_wait: i32,
-    pub big_left: i32,
-    pub big_wait: i32,
+    pub fly: Charge,
+    pub big: Charge,
+    pub dash: Charge,
+    /// the instant turn's timer (`spin` is the wheels' turn)
+    pub spin_round: Charge,
+    pub nitrous: Charge,
+    pub leap: Charge,
     /// how far out the big wheels are, zero to ONE: they take a second
     pub lift: i32,
     /// the height each big wheel stands at, which climbs slowly
@@ -197,12 +254,12 @@ impl Car {
             travel: [BASE.rest; 4],
             spin: 0,
             grounded: 0,
-            hover_left: 0,
-            hover_wait: 0,
-            fly_left: 0,
-            fly_wait: 0,
-            big_left: 0,
-            big_wait: 0,
+            fly: Charge::default(),
+            big: Charge::default(),
+            dash: Charge::default(),
+            spin_round: Charge::default(),
+            nitrous: Charge::default(),
+            leap: Charge::default(),
             lift: 0,
             feet: [pos.y; 4],
             flipping: false,
@@ -233,12 +290,8 @@ impl Car {
         self.kit.tune(self.lift)
     }
 
-    pub fn hovering(&self) -> bool {
-        self.hover_left > 0
-    }
-
     pub fn flying(&self) -> bool {
-        self.fly_left > 0
+        self.fly.active()
     }
 
     fn push(&mut self, at: V3, f: V3, dt: i32) {
@@ -255,32 +308,50 @@ impl Car {
     }
 
     pub fn step(&mut self, c: Controls, t: &Terrain, city: &mut Rubble, dt: i32) {
-        self.big_wait = (self.big_wait - 1).max(0);
-        if c.big && self.kit.big_wheels && self.big_left == 0 && self.big_wait == 0 {
-            self.big_left = BIG_TICKS;
-            self.big_wait = BIG_TICKS + BIG_RECHARGE;
-        }
-        self.big_left = (self.big_left - 1).max(0);
-        let out = if self.big_left > 0 { ONE } else { 0 };
+        let k = self.kit;
+        self.big.fire(c.big && k.big_wheels, BIG_TICKS, BIG_RECHARGE);
+        let out = if self.big.active() { ONE } else { 0 };
         self.lift = fx::approach(self.lift, out, ONE / 60);
-        let tune = self.tune();
-        self.hover_wait = (self.hover_wait - 1).max(0);
-        self.fly_wait = (self.fly_wait - 1).max(0);
-        if c.hover && self.kit.hover && self.hover_left == 0 && self.hover_wait == 0 && self.fly_left == 0 {
-            self.hover_left = HOVER_TICKS;
-            self.hover_wait = HOVER_TICKS + HOVER_RECHARGE;
-        }
-        if c.fly && self.kit.wings && self.fly_left == 0 && self.fly_wait == 0 {
-            self.fly_left = FLY_TICKS;
-            self.fly_wait = FLY_TICKS + FLY_RECHARGE;
-            self.hover_left = 0;
+        let mut tune = self.tune();
+        if self.fly.fire(c.fly && k.wings, FLY_TICKS, FLY_RECHARGE) {
             // a hop into the air to start the flight
             self.body.vel = self.body.vel.add(V3::UP.scale(int(6)));
         }
-        let flying = self.fly_left > 0;
-        let hovering = self.hover_left > 0 && !flying;
-        self.hover_left = (self.hover_left - 1).max(0);
-        self.fly_left = (self.fly_left - 1).max(0);
+        if self.dash.fire(c.dash && k.dash, DASH_TICKS, DASH_RECHARGE) {
+            self.dash_off(c);
+        }
+        if self.spin_round.fire(c.spin && k.spin, SPIN_TICKS, SPIN_RECHARGE) {
+            self.turn_round(c);
+        }
+        if self
+            .leap
+            .fire(c.leap && k.leap && self.grounded > 0, LEAP_TICKS, LEAP_RECHARGE)
+        {
+            let b = &mut self.body;
+            b.vel.y = b.vel.y.max(0) + LEAP_SPEED;
+        }
+        self.nitrous
+            .fire(c.nitrous && k.nitrous, NITROUS_TICKS, NITROUS_RECHARGE);
+        let flying = self.fly.active();
+        let burning = self.nitrous.active();
+        for ch in [
+            &mut self.big,
+            &mut self.fly,
+            &mut self.dash,
+            &mut self.spin_round,
+            &mut self.nitrous,
+            &mut self.leap,
+        ] {
+            ch.tick();
+        }
+        if burning {
+            // a rocket on loose tyres: it pushes whether or not they touch
+            tune.grip = tune.grip * NITROUS_GRIP / 100;
+            let b = &mut self.body;
+            let fwd = b.basis[2].neg();
+            let room = ONE - fx::div(b.vel.dot(fwd).clamp(0, NITROUS_TOP), NITROUS_TOP);
+            b.vel = b.vel.add(fwd.scale(fx::mul(fx::mul(NITROUS_PUSH, room), dt)));
+        }
 
         let want_steer = fx::mul(c.steer, tune.steer);
         // steer less at speed, as an arcade car does
@@ -298,8 +369,6 @@ impl Car {
 
         if flying {
             self.fly(c, tune, dt);
-        } else if hovering {
-            self.hover(c, tune, t, city, dt);
         } else {
             self.wheels(c, tune, t, city, dt);
         }
@@ -461,7 +530,7 @@ impl Car {
         self.scratch = scratch;
         self.grounded = grounded;
         if stilts {
-            // the stilts hold the car level, as hover does
+            // the stilts hold the car level
             let b = &mut self.body;
             let level = b.basis[1].cross(V3::UP);
             b.ang = b.ang.add(level.scale(fx::mul(6 * ONE, dt)));
@@ -475,31 +544,38 @@ impl Car {
         }
     }
 
-    fn hover(&mut self, c: Controls, tune: Tune, t: &Terrain, city: &mut Rubble, dt: i32) {
-        let b = &self.body;
-        let mut scratch = std::mem::take(&mut self.scratch);
-        let mut floor = t.height(b.pos.x, b.pos.z);
-        let probe = b.pos.add(V3::UP.scale(int(2)));
-        if let Some((d, _, _)) = city.ray(probe, V3::UP.neg(), int(12), &mut scratch) {
-            floor = floor.max(probe.y - d);
-        }
-        self.scratch = scratch;
+    /// The dash: a kick along the ground toward where the keys point (the
+    /// nose when none do), and a little up.
+    fn dash_off(&mut self, c: Controls) {
         let b = &mut self.body;
-        let gap = b.pos.y - floor - HOVER_HEIGHT;
-        let lift = rubble::GRAVITY - fx::mul(gap, 30 * ONE) - fx::mul(b.vel.y, 8 * ONE);
-        b.vel.y += fx::mul(lift.clamp(0, rubble::GRAVITY * 3), dt);
-        // level the car and steer it like a boat
-        let level = b.basis[1].cross(V3::UP);
-        b.ang = b.ang.add(level.scale(fx::mul(8 * ONE, dt)));
-        b.ang.y = fx::mul(c.steer, ONE * 2);
         let fwd = b.basis[2].neg();
         let flat = v3(fwd.x, 0, fwd.z).norm();
-        let along = b.vel.dot(flat);
-        let want = fx::mul(c.throttle, tune.top);
-        let side = v3(b.vel.x, 0, b.vel.z).sub(flat.scale(along));
-        b.vel = b.vel.sub(side.scale(ONE / 12));
-        b.vel = b.vel.add(flat.scale(fx::mul(want - along, ONE / 50)));
-        self.grounded = 0;
+        let left = V3::UP.cross(flat);
+        let mut dir = flat
+            .scale(c.throttle.signum() * ONE)
+            .add(left.scale(c.steer.signum() * ONE));
+        if dir.len() < ONE / 2 {
+            dir = flat;
+        }
+        let kick = dir.norm().scale(DASH_SPEED).add(V3::UP.scale(DASH_HOP));
+        b.vel = b.vel.add(kick);
+    }
+
+    /// The instant turn: the car and its speed swing round together, a
+    /// quarter turn toward a held left or right, a half turn otherwise.
+    fn turn_round(&mut self, c: Controls) {
+        let angle = match c.steer.signum() {
+            1 => fx::TURN / 4,
+            -1 => -fx::TURN / 4,
+            _ => fx::TURN / 2,
+        };
+        let q = Quat::yaw(angle);
+        let b = &mut self.body;
+        b.rot = q.mul(b.rot).norm();
+        b.basis = b.rot.basis();
+        b.vel = q.rotate(b.vel);
+        b.ang = q.rotate(b.ang);
+        self.steer = 0;
     }
 
     fn fly(&mut self, c: Controls, tune: Tune, dt: i32) {
@@ -530,7 +606,7 @@ impl Car {
             // flat on its roof: roll over the nose's axis
             axis = b.basis[2].neg();
         }
-        b.ang = b.ang.add(axis.scale(fx::mul(6 * ONE, dt))).scale(ONE - ONE / 12);
+        b.ang = b.ang.add(axis.scale(fx::mul(RIGHTING, dt))).scale(ONE - ONE / 12);
         // lift it just clear of the ground to turn, never higher
         if up.y < ONE * 7 / 10 && b.vel.y < int(2) && above < int(3) {
             b.vel.y += fx::mul(rubble::GRAVITY + int(3), dt);
@@ -691,6 +767,33 @@ mod tests {
     }
 
     #[test]
+    fn the_flip_key_has_a_car_on_its_roof_back_on_its_wheels_in_under_four_and_a_quarter_seconds() {
+        let t = Terrain::new();
+        let mut r = empty();
+        let mut car = Car::new(v3(0, int(2), 0), 0);
+        car.body.rot = Quat::axis_angle(v3(0, 0, ONE), deg(180));
+        car.body.basis = car.body.rot.basis();
+        drive(&mut car, Controls::default(), &t, &mut r, 120);
+        let flip = Controls {
+            flip: true,
+            ..Controls::default()
+        };
+        let mut k = 0;
+        while k < 600 && !(car.up().y > ONE * 9 / 10 && car.grounded == 4) {
+            let upright = car.up().y > ONE * 9 / 10;
+            drive(
+                &mut car,
+                if upright { Controls::default() } else { flip },
+                &t,
+                &mut r,
+                1,
+            );
+            k += 1;
+        }
+        assert!(k < 255, "{k} ticks");
+    }
+
+    #[test]
     fn the_flip_key_rolls_an_upside_down_car_back_onto_its_wheels() {
         let t = Terrain::new();
         let mut r = empty();
@@ -709,22 +812,109 @@ mod tests {
         assert_eq!(car.grounded, 4);
     }
 
-    #[test]
-    fn hover_holds_it_up_for_three_seconds_and_then_it_lands() {
+    /// A car settled on flat ground and rolling north at `speed` m/s.
+    fn rolling(speed: i32) -> (Terrain, Rubble, Car) {
         let t = Terrain::new();
         let mut r = empty();
         let mut car = Car::new(v3(0, ONE, 0), 0);
-        car.kit.hover = true;
         drive(&mut car, Controls::default(), &t, &mut r, 60);
-        let h = Controls {
-            hover: true,
+        car.body.vel = car.fwd().scale(int(speed));
+        (t, r, car)
+    }
+
+    #[test]
+    fn the_dash_kicks_the_car_sideways_toward_the_held_key() {
+        let (t, mut r, mut car) = rolling(10);
+        car.kit.dash = true;
+        let dash = Controls {
+            dash: true,
+            steer: ONE,
             ..Controls::default()
         };
-        drive(&mut car, h, &t, &mut r, 90);
-        assert!(car.body.pos.y > int(2), "up: {}", car.body.pos.y);
-        drive(&mut car, Controls::default(), &t, &mut r, 90 + 120);
-        assert!(car.body.pos.y < ONE * 2, "down again: {}", car.body.pos.y);
-        assert!(car.hover_wait > 0, "and recharging");
+        drive(&mut car, dash, &t, &mut r, 1);
+        assert!(
+            car.body.vel.x < -int(15),
+            "kicked left (−x): {}",
+            car.body.vel.x / ONE
+        );
+        drive(&mut car, dash, &t, &mut r, 30);
+        let x = car.body.vel.x;
+        drive(&mut car, dash, &t, &mut r, 1);
+        assert!(car.body.vel.x >= x - ONE, "once, then it recharges");
+        assert!(car.dash.wait > 0);
+    }
+
+    #[test]
+    fn the_instant_turn_swings_the_car_and_its_speed_round_together() {
+        let (t, mut r, mut car) = rolling(20);
+        car.kit.spin = true;
+        let spin = Controls {
+            spin: true,
+            ..Controls::default()
+        };
+        drive(&mut car, spin, &t, &mut r, 1);
+        assert!(car.fwd().z > ONE * 9 / 10, "it faces south: {:?}", car.fwd());
+        assert!(car.forward_speed() > int(15), "and drives on that way");
+        assert!(car.body.vel.z > int(15), "{}", car.body.vel.z / ONE);
+        let (t, mut r, mut car) = rolling(20);
+        car.kit.spin = true;
+        let left = Controls {
+            spin: true,
+            steer: ONE,
+            ..Controls::default()
+        };
+        drive(&mut car, left, &t, &mut r, 1);
+        assert!(
+            car.fwd().x < -ONE * 9 / 10,
+            "a quarter turn left: {:?}",
+            car.fwd()
+        );
+    }
+
+    #[test]
+    fn nitrous_sends_it_far_past_its_top_speed_and_then_burns_out() {
+        let (t, mut r, mut car) = rolling(20);
+        car.kit.nitrous = true;
+        let go = Controls {
+            nitrous: true,
+            throttle: ONE,
+            ..Controls::default()
+        };
+        drive(&mut car, go, &t, &mut r, NITROUS_TICKS as usize);
+        assert!(
+            car.forward_speed() > BASE.top * 3 / 2,
+            "{} m/s",
+            car.forward_speed() / ONE
+        );
+        let plain = Controls {
+            throttle: ONE,
+            ..Controls::default()
+        };
+        drive(&mut car, plain, &t, &mut r, 60 * 6);
+        assert!(
+            car.forward_speed() < BASE.top + int(2),
+            "back to its own top speed"
+        );
+    }
+
+    #[test]
+    fn the_leap_jumps_the_car_off_the_ground_and_it_lands_on_its_wheels() {
+        let (t, mut r, mut car) = rolling(0);
+        car.kit.leap = true;
+        let leap = Controls {
+            leap: true,
+            ..Controls::default()
+        };
+        let mut top = 0;
+        for _ in 0..60 * 3 {
+            car.step(leap, &t, &mut r, fx::ratio(1, 60));
+            top = top.max(car.body.pos.y);
+        }
+        assert!(top > int(5), "up {} m", top / ONE);
+        assert!(
+            car.up().y > ONE * 9 / 10 && car.grounded == 4,
+            "down again on its wheels"
+        );
     }
 
     #[test]
@@ -854,7 +1044,7 @@ mod tests {
             "back down: {}",
             car.body.pos.y / ONE
         );
-        assert!(car.big_wait > 0, "and recharging");
+        assert!(car.big.wait > 0, "and recharging");
     }
 
     #[test]
