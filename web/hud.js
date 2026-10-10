@@ -9,6 +9,7 @@ export function makeHud(copy) {
   const rows = new Map();
   const mirrors = el("mirrors");
   const frames = [];
+  let songSeq = null;
 
   function ability(a) {
     let row = rows.get(a.id);
@@ -73,6 +74,18 @@ export function makeHud(copy) {
       const marker = el("marker");
       marker.hidden = !h.car_marker;
       if (h.car_marker) [marker.style.left, marker.style.top] = h.car_marker;
+      // the record player's callout: the song's name, popped afresh on a change
+      const callout = el("record-callout");
+      callout.hidden = !h.player_marker;
+      if (h.player_marker) [callout.style.left, callout.style.top] = h.player_marker;
+      const word = el("record-song");
+      word.textContent = h.song;
+      if (h.song_seq !== songSeq) {
+        songSeq = h.song_seq;
+        word.classList.remove("pop");
+        void word.offsetWidth;
+        word.classList.add("pop");
+      }
       const toast = el("toast");
       toast.hidden = !h.toast;
       if (h.toast) {

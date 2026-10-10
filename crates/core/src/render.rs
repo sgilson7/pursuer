@@ -57,14 +57,14 @@ const RUN_GAP: u32 = 96;
 
 /// A finished batch: its values; for each layer and mesh, (layer, mesh,
 /// byte offset, count); and the sprite's (byte offset, count, texture).
-pub type Finished = (Vec<i32>, Vec<(usize, u32, u32, u32)>, Option<(u32, u32, u32)>);
+pub type Finished = (Vec<i32>, Vec<(usize, u32, u32, u32)>, Vec<(u32, u32, u32)>);
 
 /// Shapes rebuilt each frame, sorted by layer and mesh.
 #[derive(Debug, Clone)]
 pub struct Batch {
     lists: Vec<Vec<i32>>,
-    sprite: Vec<i32>,
-    sprite_texture: u32,
+    /// textured cards, one list per texture, in the order first used
+    sprites: Vec<(u32, Vec<i32>)>,
 }
 
 fn slot(layer: usize, mesh: Mesh) -> usize {
@@ -88,8 +88,7 @@ impl Batch {
     pub fn new() -> Batch {
         Batch {
             lists: vec![Vec::new(); LAYERS * Mesh::ALL.len()],
-            sprite: Vec::new(),
-            sprite_texture: 0,
+            sprites: Vec::new(),
         }
     }
 
@@ -97,14 +96,21 @@ impl Batch {
         self.lists[slot(layer, mesh)].extend_from_slice(&instance(a, rgb, style));
     }
 
-    /// The pursuer's picture, on the card mesh, with its texture.
+    /// A picture on the card mesh (the pursuer, a record's cover), with its
+    /// texture.
     pub fn sprite(&mut self, a: &Affine, texture: u32) {
-        self.sprite.extend_from_slice(&instance(a, [ONE; 3], 0));
-        self.sprite_texture = texture;
+        let k = match self.sprites.iter().position(|s| s.0 == texture) {
+            Some(k) => k,
+            None => {
+                self.sprites.push((texture, Vec::new()));
+                self.sprites.len() - 1
+            }
+        };
+        self.sprites[k].1.extend_from_slice(&instance(a, [ONE; 3], 0));
     }
 
     /// The values and, for each layer and mesh, where its instances start
-    /// (bytes) and how many there are; and the sprite's.
+    /// (bytes) and how many there are; and each texture's sprites'.
     pub fn finish(self) -> Finished {
         let mut values = Vec::new();
         let mut runs = Vec::new();
@@ -119,15 +125,13 @@ impl Batch {
                 values.extend_from_slice(v);
             }
         }
-        let sprite = if self.sprite.is_empty() {
-            None
-        } else {
+        let mut sprites = Vec::new();
+        for (texture, v) in &self.sprites {
             let offset = (values.len() * BYTES_PER_VALUE) as u32;
-            let n = (self.sprite.len() / INSTANCE_VALUES) as u32;
-            values.extend_from_slice(&self.sprite);
-            Some((offset, n, self.sprite_texture))
-        };
-        (values, runs, sprite)
+            sprites.push((offset, (v.len() / INSTANCE_VALUES) as u32, *texture));
+            values.extend_from_slice(v);
+        }
+        (values, runs, sprites)
     }
 }
 
@@ -330,17 +334,19 @@ mod tests {
     }
 
     #[test]
-    fn the_batch_lays_out_layers_then_the_sprite() {
+    fn the_batch_lays_out_layers_then_the_sprites_by_texture() {
         let mut b = Batch::new();
         let a = boxed(V3::ZERO, v3(ONE, ONE, ONE));
         b.push(LAYER_COCKPIT, Mesh::Cube, &a, [ONE; 3], 0);
         b.push(LAYER_WORLD, Mesh::Cube, &a, [ONE; 3], 0);
         b.sprite(&a, 3);
-        let (values, runs, sprite) = b.finish();
-        assert_eq!(values.len(), 3 * INSTANCE_VALUES);
+        b.sprite(&a, 7);
+        b.sprite(&a, 3);
+        let (values, runs, sprites) = b.finish();
+        assert_eq!(values.len(), 5 * INSTANCE_VALUES);
         assert_eq!(runs[0].0, LAYER_WORLD);
         assert_eq!(runs[1].0, LAYER_COCKPIT);
-        assert_eq!(sprite, Some((2 * 64, 1, 3)));
+        assert_eq!(sprites, vec![(2 * 64, 2, 3), (4 * 64, 1, 7)]);
     }
 }
 

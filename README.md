@@ -57,11 +57,13 @@ A push to `main` runs the same check in Chromium and deploys `dist/` to GitHub P
 
 ## Music
 
-The request asked for "Are You Coming to the Tree" from *The Hunger Games* when the pursuer appears. That recording is not published with the game, since it is not Sam's to publish. The page plays an original tune instead, synthesized from `data/music.json`. To play a recording you have the right to use, put it under `web/` and set `file` in `data/music.json` to its path.
+The record player on the cabinet by the kitchen picks the chase music: press E at it to step through the records, and the song's name floats over it. The records are listed in `data/music.json`. *The Hanging Tree* (sped up) is first and plays from 0:54.85, where "are you, are you" comes in, and loops back there. The original chiptune is second.
+
+The Hanging Tree recording lives at `web/music/the-hanging-tree-sped-up.mp3` and is kept out of the repository by `.gitignore`, since it is a commercial recording and not Sam's to publish. A local build plays it. The deployed build does not have it, so `scripts/build.sh` marks it absent there and the record player offers only the chiptune.
 
 ## Credits
 
-Made by Sam Gilson. Inspired by Crazy Taxi, Battlefield: Bad Company and Paper Mario; it uses nothing of theirs. The pursuers are original characters.
+Made by Sam Gilson. Inspired by Crazy Taxi, Battlefield: Bad Company and Paper Mario; it uses nothing of theirs. Six of the pursuers are original characters; the seventh, Kanye West, comes from a photograph Sam added, and his record's cover is a TikZ homage to *Yeezus*.
 
 ## Licence
 

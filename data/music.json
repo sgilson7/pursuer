@@ -1,6 +1,19 @@
 {
- "_about": "The music when the pursuer stands up. Set `file` to the path of a recording under web/ (for example \"audio/pursuit.mp3\") to play it on a loop; with `file` null the page plays the original tune below, synthesized: `notes` are [frequency in Hz (0 a rest), seconds], under a drone of `drone` Hz. The request asked for \"Are You Coming to the Tree\" from The Hunger Games; that recording is not published with this game (SECOND-ORDER M1).",
- "file": null,
+ "_about": "The chase music, chosen on the record player in the house. `tracks` are the records in the order the player steps through them; the first one present is the default. A track with a `file` (a recording under web/) plays from `start` seconds at `rate` times speed and loops back to `start`; one with `file` null is the original tune below, synthesized: `notes` are [frequency in Hz (0 a rest), seconds], under a drone of `drone` Hz. scripts/build.sh sets `present` false on a track whose file is not in the build, and the record player skips it. The Hanging Tree recording is kept out of the public repository (.gitignore, SECOND-ORDER M1).",
+ "tracks": [
+  {
+   "id": "hanging_tree",
+   "name": "The Hanging Tree (sped up)",
+   "file": "music/the-hanging-tree-sped-up.mp3",
+   "start": 54.85,
+   "rate": 1
+  },
+  {
+   "id": "chiptune",
+   "name": "Pursuer (chiptune)",
+   "file": null
+  }
+ ],
  "volume": 0.5,
  "gain": 0.16,
  "vibrato_hz": 5.2,

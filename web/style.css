@@ -119,3 +119,24 @@ table.controls td:first-child { font-weight: 700; white-space: nowrap; }
 #message:empty { display: none; }
 /* the verdict's backdrop is one pursuer; soften it so the one that caught you leads */
 #caught .art { filter: blur(4px) saturate(0.7) brightness(0.92); transform: scale(1.03); }
+
+/* The record player's callout, after Food Truck Circus's "EXCELLENT": a heavy
+   word in the paper colour with a plum outline and a hard drop shadow, which
+   pops in with a twist when the record changes and then bobs over the player. */
+#record-callout { position: absolute; transform: translate(-50%, -100%); text-align: center; white-space: nowrap; }
+#record-callout .word {
+  font-weight: 900; font-size: clamp(22px, 3.4vw, 46px); letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--gold); -webkit-text-stroke: 3px var(--ink); paint-order: stroke fill;
+  text-shadow: 0 5px 0 var(--ink); animation: bob 2.4s ease-in-out infinite;
+}
+#record-callout .word.pop { animation: pop-in 0.7s ease-out, bob 2.4s ease-in-out 0.7s infinite; }
+@keyframes pop-in {
+  0% { opacity: 0; transform: scale(0.4) rotate(-6deg); }
+  35% { opacity: 1; transform: scale(1.18) rotate(2deg); }
+  60% { transform: scale(1) rotate(0); }
+  100% { transform: scale(1) rotate(0); }
+}
+@keyframes bob {
+  0%, 100% { transform: translateY(0) rotate(-1.5deg); }
+  50% { transform: translateY(-8px) rotate(1.5deg); }
+}

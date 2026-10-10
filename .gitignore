@@ -4,3 +4,6 @@
 __pycache__/
 /mutants.out*/
 /.venv
+
+# commercial recordings stay out of the public repository (SECOND-ORDER M1)
+/web/music/*.mp3

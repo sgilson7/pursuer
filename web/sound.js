@@ -1,6 +1,6 @@
 // Sound, synthesized from data/sounds.json, and the music from
-// data/music.json. The core says what happened and whether the music plays;
-// this file only performs it. White noise comes from the core's generator,
+// data/music.json. The core says what happened, whether the music plays and
+// which record is on; this file only performs it. White noise comes from the core's generator,
 // since the page may not draw random numbers.
 import { noise } from "./pkg/pursuer_shim.js";
 
@@ -12,7 +12,7 @@ let music = null;
 let muted = false;
 const lastAt = new Map();
 // the music: a recording on a loop, or the tune scheduled note by note
-const tune = { playing: false, audio: null, voices: [], drone: [], next: 0, index: 0, gain: null };
+const tune = { playing: null, audio: null, voices: [], drone: [], next: 0, index: 0, gain: null };
 
 export function setup(sounds, musicData) {
   recipes = sounds;
@@ -110,14 +110,27 @@ function note(freq, t, dur) {
   tune.voices.push(osc, lfo);
 }
 
-function startMusic() {
-  tune.playing = true;
-  if (music.file) {
-    tune.audio = new Audio(music.file);
-    tune.audio.loop = true;
-    tune.audio.volume = music.volume;
-    tune.audio.muted = muted;
-    tune.audio.play().catch(() => {});
+// A recording plays from its `start` and, at its end, from `start` again.
+function startRecording(track) {
+  const audio = new Audio(track.file);
+  audio.volume = music.volume;
+  audio.muted = muted;
+  audio.playbackRate = track.rate;
+  audio.preservesPitch = false;
+  const fromStart = () => {
+    audio.currentTime = track.start;
+    audio.play().catch(() => {});
+  };
+  audio.addEventListener("loadedmetadata", fromStart, { once: true });
+  audio.addEventListener("ended", fromStart);
+  tune.audio = audio;
+}
+
+function startMusic(id) {
+  tune.playing = id;
+  const track = music.tracks.find((t) => t.id === id);
+  if (track && track.file) {
+    startRecording(track);
     return;
   }
   tune.gain = ctx.createGain();
@@ -139,9 +152,10 @@ function startMusic() {
 }
 
 function stopMusic() {
-  tune.playing = false;
+  tune.playing = null;
   if (tune.audio) {
     tune.audio.pause();
+    tune.audio.removeAttribute("src");
     tune.audio = null;
   }
   for (const v of tune.voices.concat(tune.drone)) {
@@ -157,12 +171,12 @@ function stopMusic() {
   tune.gain = null;
 }
 
-// Called each frame with whether the core wants the music: keeps the tune
-// scheduled a note ahead of the clock.
-export function musicOn(on) {
+// Called each frame with whether the core wants the music and which record
+// is on: keeps the tune scheduled a note ahead of the clock.
+export function musicOn(on, id) {
   if (!ctx || !music) return;
-  if (on && !tune.playing) startMusic();
-  if (!on && tune.playing) stopMusic();
+  if (tune.playing && (!on || tune.playing !== id)) stopMusic();
+  if (on && !tune.playing) startMusic(id);
   if (!tune.playing || tune.audio) return;
   while (tune.next < ctx.currentTime + music.notes[tune.index][1]) {
     const [freq, dur] = music.notes[tune.index];

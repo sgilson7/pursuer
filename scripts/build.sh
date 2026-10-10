@@ -22,6 +22,19 @@ wasm-bindgen --target web --no-typescript --out-dir dist/pkg \
 cp -R web/* dist/
 cp -R data dist/data
 
+# A recording kept out of the repository (.gitignore) is in a local build and
+# not in the deployed one: mark each track present or not, so the record
+# player skips one the build lacks (data/music.json).
+python3 - <<'PY'
+import json, pathlib
+path = pathlib.Path("dist/data/music.json")
+music = json.loads(path.read_text())
+for t in music["tracks"]:
+    t["present"] = t["file"] is None or (pathlib.Path("dist") / t["file"]).is_file()
+    print(f"music: {t['id']} {'present' if t['present'] else 'not in this build'}")
+path.write_text(json.dumps(music, indent=1) + "\n")
+PY
+
 # Cache busting (from gear-master-2d by way of slushline). GitHub Pages serves
 # every file with a ten-minute cache, so a returning player would keep the old
 # module after a deploy. The content hash goes into every internal URL, and a

@@ -29,6 +29,10 @@ pub const CAR_AT: V3 = v3(11 * ONE, ONE, 0);
 pub const CAR_YAW: i32 = -fx::QUARTER;
 /// The walls take this long to fall, all told.
 pub const FOLD_TICKS: i32 = 150;
+/// The middle of the record player's platter, on the cabinet against the
+/// north wall, and how near the line of sight must pass to aim at it.
+pub const TURNTABLE: V3 = v3(-ONE * 105 / 100, ONE * 87 / 100, -ONE * 540 / 100);
+pub const TURNTABLE_RADIUS: i32 = ONE * 30 / 100;
 
 /// A box drawn in the house: mesh, transform, colour.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -222,6 +226,12 @@ pub struct Item {
     pub parts: Vec<Part>,
     /// the middle of the item, for looking at it
     pub centre: V3,
+    /// a picture laid on the item's top (a record's sleeve): its name under
+    /// web/art/covers/, and its side in metres
+    pub cover: Option<String>,
+    pub cover_size: i32,
+    /// the height of the item's top above its foot
+    pub top: i32,
 }
 
 #[derive(Deserialize)]
@@ -241,6 +251,10 @@ struct ItemJson {
     turn: i32,
     radius: i32,
     parts: Vec<Vec<serde_json::Value>>,
+    #[serde(default)]
+    cover: Option<String>,
+    #[serde(default)]
+    cover_size: i32,
 }
 
 /// The items and how many seconds of holding brings a pursuer.
@@ -289,6 +303,9 @@ pub fn parse_items(json: &str) -> Result<(Vec<Item>, i32), String> {
             radius: m(it.radius),
             parts,
             centre: at.add(V3::UP.scale(top / 2)),
+            cover: it.cover,
+            cover_size: m(it.cover_size),
+            top,
         });
     }
     Ok((items, f.hold_seconds))
@@ -308,6 +325,19 @@ impl Item {
                 rgb: p.rgb,
             });
         }
+    }
+
+    /// Where its cover lies, placed by `place`: flat on its top, the
+    /// picture's top edge toward −z (away from someone facing north).
+    pub fn cover_at(&self, place: &Affine) -> Option<Affine> {
+        self.cover.as_ref()?;
+        let s = self.cover_size;
+        Some(place.then(&Affine {
+            c0: v3(s, 0, 0),
+            c1: v3(0, 0, -s),
+            c2: V3::UP,
+            t: v3(0, self.top + ONE / 500, 0),
+        }))
     }
 
     /// Where it rests in the house.
@@ -451,9 +481,22 @@ impl House {
         boxed(c(150, 15, 250), c(400, 90, 400), pal.get("wood"), true);
         boxed(c(180, 15, 420), c(240, 60, 480), pal.get("wood_dark"), true);
         boxed(c(310, 15, 170), c(370, 60, 230), pal.get("wood_dark"), true);
+        // the record player on its cabinet, between the television and the
+        // kitchen; the record to pick up lies beside it (data/items.json)
+        boxed(c(-170, 15, -585), c(40, 75, -495), pal.get("wood"), true);
+        boxed(c(-160, 75, -575), c(-50, 85, -505), pal.get("turntable"), false);
+        boxed(c(-75, 85, -520), c(-60, 89, -510), pal.get("chrome"), false);
+        boxed(c(-72, 89, -575), c(-66, 92, -525), pal.get("chrome"), false);
         // a lamp
         boxed(c(-820, 15, 470), c(-790, 160, 500), pal.get("wood_dark"), false);
         boxed(c(-850, 140, 440), c(-760, 180, 530), pal.get("window_lit"), false);
+        for (d, h, rgb) in [(40, 2, "record"), (12, 3, "record_label")] {
+            fixed.push(Shape {
+                mesh: Mesh::Cyl,
+                at: Affine::translate(c(-105, 85 + h / 2, -540)).then(&Affine::scale(c(d, h, d))),
+                rgb: pal.get(rgb),
+            });
+        }
         let mut solids_all = solids;
         for (k, wl) in walls.iter().enumerate() {
             wl.solids(k, &mut solids_all);
@@ -584,7 +627,7 @@ mod tests {
     #[test]
     fn every_item_parses_and_sits_inside_the_house() {
         let (items, hold) = parse_items(include_str!("../../../data/items.json")).unwrap();
-        assert_eq!(items.len(), 6);
+        assert_eq!(items.len(), 7);
         assert_eq!(hold, 5);
         for it in &items {
             assert!(

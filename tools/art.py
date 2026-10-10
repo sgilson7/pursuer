@@ -39,7 +39,9 @@ wrong), and where this file enforces each:
 - the cast: one original character per item (`MONSTER_OF`): the guitar's
   Headliner, the trophy's Champion, the teddy's Mr. Buttons, the toaster's
   Morning Host, the microphone's Crooner, the crown's Queen. No real person
-  and no known character. Each has staring eyes and a fixed, too-wide grin
+  and no known character drawn here. The record's pursuer, Kanye West, is
+  the exception Sam added: his standee is made from a photograph by
+  tools/standee.py, and only his record's icon is drawn here. Each has staring eyes and a fixed, too-wide grin
   (`stare`, `grin`, or the bear's stitched grin), and nothing gory.
 - the item matches its monster: the guitar, the ribbon microphone, the
   crown and the toast are each drawn by one function used both by the item
@@ -92,7 +94,8 @@ PREAMBLE = r"""\documentclass[tikz,border=0pt]{standalone}
 """ + "\n".join(f"\\definecolor{{{k}}}{{HTML}}{{{v}}}" for k, v in COLOURS.items()) + "\n"
 
 # Canvas sizes in cm and in pixels. Monsters are drawn at 100 px per cm.
-SIZE = {"scene": ((32.0, 18.0), (1920, 1080)), "monsters": ((10.24, 15.36), (1024, 1536)), "items": ((4.0, 4.0), (256, 256))}
+SIZE = {"scene": ((32.0, 18.0), (1920, 1080)), "monsters": ((10.24, 15.36), (1024, 1536)), "items": ((4.0, 4.0), (256, 256)), "covers": ((4.0, 4.0), (512, 512))}
+OPAQUE = ("scene", "covers")  # drawn edge to edge, with no transparent background
 CX = 5.12  # a monster's centre line
 BORDER_CM = 0.24  # the standee's white border: 24 px at 100 px/cm
 PT = 0.0351459  # cm per pt
@@ -727,7 +730,7 @@ def ermine_spot(g, x, y, r):
 
 
 MONSTERS = {"headliner": headliner, "champion": champion, "buttons": buttons, "host": host, "crooner": crooner, "queen": queen}
-MONSTER_OF = {"guitar": "headliner", "trophy": "champion", "teddy": "buttons", "toaster": "host", "microphone": "crooner", "crown": "queen"}
+MONSTER_OF = {"guitar": "headliner", "trophy": "champion", "teddy": "buttons", "toaster": "host", "microphone": "crooner", "crown": "queen", "vinyl": "kanye"}
 
 
 def standee(fig, who, x=None, y=None, s=1.0, ink=2.6, border_cm=BORDER_CM, stand=False):
@@ -1142,7 +1145,41 @@ def item_picture(item):
     elif item == "crown":
         with g.frame(2.0, 0.8, 1.0):
             crown(g)
+    elif item == "vinyl":
+        # after the Yeezus cover: a clear sleeve with the record showing
+        # through it and a strip of red tape down one edge
+        g.circle(2.32, 2.0, 1.32, "hairdark")
+        for r in (1.12, 0.94, 0.76):
+            g.raw(f"\\draw[leatherhi, line width=0.6pt] {g.P(2.32, 2.0)} circle ({f(r)});\n")
+        g.circle(2.32, 2.0, 0.4, "guitar", lw=0.8)
+        g.circle(2.32, 2.0, 0.06, "ink", lw=0.4)
+        g.rect(0.4, 0.5, 2.9, 3.5, "chrome", opts=", fill opacity=0.55")
+        g.stroke([(0.7, 3.15), (1.3, 3.3)], lw=2.4, colour="white", opts=", opacity=0.8")
+        g.stroke([(2.45, 0.8), (2.7, 1.3)], lw=1.8, colour="white", opts=", opacity=0.6")
+        g.poly([(0.62, 0.38), (1.0, 0.36), (1.02, 3.64), (0.64, 3.62)], "guitar", lw=0.9)
     return g, "items"
+
+
+def cover_picture(item):
+    """A record's sleeve, edge to edge, laid on the record in the house.
+    The vinyl's is after the Yeezus cover: a clear case with the disc showing
+    through it and a strip of red tape down the left edge."""
+    g = Fig(ink=1.6)
+    g.rect(0, 0, 4.0, 4.0, "chrome", outline=False)
+    g.rect(0, 0, 4.0, 4.0, "white", outline=False, opts=", opacity=0.35")
+    g.circle(2.15, 2.0, 1.62, "hairdark")
+    for r in (1.4, 1.18, 0.96, 0.78):
+        g.raw(f"\\draw[leatherhi, line width=0.7pt] {g.P(2.15, 2.0)} circle ({f(r)});\n")
+    g.circle(2.15, 2.0, 0.5, "guitar", lw=0.8)
+    g.circle(2.15, 2.0, 0.07, "ink", lw=0.4)
+    g.rect(0, 0, 4.0, 4.0, "chrome", outline=False, opts=", opacity=0.3")
+    g.stroke([(0.9, 3.55), (1.9, 3.75)], lw=3.0, colour="white", opts=", opacity=0.8")
+    g.stroke([(3.2, 0.45), (3.55, 1.1)], lw=2.2, colour="white", opts=", opacity=0.6")
+    g.rect(0.25, 0, 0.72, 4.0, "guitar", outline=False)
+    g.stroke([(0.25, 0), (0.25, 4.0)], lw=1.2)
+    g.stroke([(0.72, 0), (0.72, 4.0)], lw=1.2)
+    g.rect(0.02, 0.02, 3.98, 3.98, "white", outline=True, opts=", fill opacity=0", lw=2.0)
+    return g, "covers"
 
 
 PICTURES = {"title": title, "caught": caught}
@@ -1150,6 +1187,8 @@ for _who in MONSTERS:
     PICTURES[f"monsters/{_who}"] = (lambda w=_who: monster_picture(w))
 for _item in MONSTER_OF:
     PICTURES[f"items/{_item}"] = (lambda i=_item: item_picture(i))
+for _item in ("vinyl",):
+    PICTURES[f"covers/{_item}"] = (lambda i=_item: cover_picture(i))
 
 FORBIDDEN = ["\\node", "\\text", "\\put", "\\char", "\\pgftext", "label=", "\\Large", "\\huge", "\\LaTeX"]
 
@@ -1216,7 +1255,7 @@ def check(name, kind, png, preview):
         problems.append(f"size {w}x{h}, wanted {PW}x{PH}")
     if Path(png).stat().st_size > 1.5e6:
         problems.append(f"{Path(png).stat().st_size} bytes, over 1.5 MB")
-    if kind != "scene":
+    if kind not in OPAQUE:
         if ctype != 6:
             problems.append("no alpha channel on a cutout")
         pw, ph, _, rows = png_read(preview)
@@ -1255,7 +1294,7 @@ def main():
         fig, kind = make()
         tex = document(fig, kind)
         _, (PW, PH) = SIZE[kind]
-        clear = [] if kind == "scene" else ["-transp"]
+        clear = [] if kind in OPAQUE else ["-transp"]
         with tempfile.TemporaryDirectory() as tmp:
             t = Path(tmp)
             (t / "art.tex").write_text(tex)

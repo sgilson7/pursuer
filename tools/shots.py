@@ -81,6 +81,29 @@ with sync_playwright() as p:
         shot("turned")
         pg.wait_for_timeout(3000)
         shot("risen")
+    if SCRIPT == "record":
+        # from the start (facing the teddy) round to the record player on the
+        # north wall, up to it, change the record, then hold the record by it
+        turn(1872, 0)
+        hold("KeyW", 1700)
+        pg.wait_for_timeout(400)
+        shot("player")
+        pg.keyboard.press("KeyE")
+        pg.wait_for_timeout(300)
+        shot("changed")
+        pg.wait_for_timeout(900)
+        shot("settled")
+        turn(280, 40)
+        pg.wait_for_timeout(300)
+        shot("record")
+        pg.keyboard.down("KeyE")
+        pg.wait_for_timeout(2000)
+        shot("holding-record")
+        pg.wait_for_timeout(3600)
+        pg.keyboard.up("KeyE")
+        turn(-2041, -150)
+        pg.wait_for_timeout(4500)
+        shot("kanye")
     if SCRIPT == "everything":
         for k in range(6):
             pg.wait_for_timeout(1500)

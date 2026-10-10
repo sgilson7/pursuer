@@ -70,7 +70,7 @@ async function start() {
 
   let game;
   try {
-    game = new Game(palette, items, upgrades, pursuer, storage.load());
+    game = new Game(palette, items, upgrades, pursuer, musicText, storage.load());
   } catch (e) {
     el("message").textContent = String(e);
     document.body.dataset.ready = "true";
@@ -78,7 +78,11 @@ async function start() {
   }
 
   const itemList = JSON.parse(game.items());
-  const images = await Promise.all(itemList.map((it) => loadImage(`art/monsters/${it.monster}.png`)));
+  // every item's pursuer, in order, then each cover, in order: the core's texture numbers
+  const pictures = itemList
+    .map((it) => `art/monsters/${it.monster}.png`)
+    .concat(itemList.filter((it) => it.cover).map((it) => `art/covers/${it.cover}.png`));
+  const images = await Promise.all(pictures.map(loadImage));
   const canvas = el("view");
   const renderer = makeRenderer(canvas, N, { vertex, fragment, software: display.software }, (id) => game.mesh(id), images);
   if (!renderer) el("message").textContent = copy.no_webgl;
@@ -178,7 +182,8 @@ async function start() {
       el("engage").hidden = input.engaged();
     }
     for (const s of h.sounds) play(s);
-    musicOn(h.music);
+    musicOn(h.music, h.song_id);
+    if (h.sounds.includes("needle")) save();
     if (renderer) {
       if (!sceneSet) {
         renderer.setScene(game.scenery(), game.uniforms(), game.clear_color());

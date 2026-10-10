@@ -1,5 +1,5 @@
 {
-  "_about": "The things in the house. Each is drawn from parts (a mesh, a centre and a size in centimetres from the item's foot, a colour, an optional tilt in degrees about x and turn about y) and stands at `at` (centimetres, house floor at y = 15). Holding one for `hold_seconds` brings its pursuer. `art` is the pursuer's cut-out under web/art/monsters/, `icon` the item's picture under web/art/items/.",
+  "_about": "The things in the house. Each is drawn from parts (a mesh, a centre and a size in centimetres from the item's foot, a colour, an optional tilt in degrees about x and turn about y) and stands at `at` (centimetres, house floor at y = 15). Holding one for `hold_seconds` brings its pursuer. `art` is the pursuer's cut-out under web/art/monsters/, `icon` the item's picture under web/art/items/. `cover` (optional) is a picture under web/art/covers/ laid on the item's top, `cover_size` centimetres square.",
   "hold_seconds": 5,
   "items": [
     {
@@ -84,6 +84,16 @@
         ["cone", 7, 24, 7, 5, 9, 5, "#F2B53A"],
         ["sphere", 0, 14, -10, 5, 5, 3, "#13CFE3"],
         ["sphere", 0, 30, 0, 6, 6, 6, "#FF2E88"]
+      ]
+    },
+    {
+      "id": "vinyl", "name": "the record", "monster": "kanye", "monster_name": "Kanye West",
+      "line": "Kanye West heard you skip a track.",
+      "at": [-20, 75, -540], "turn": 0, "radius": 26,
+      "cover": "vinyl", "cover_size": 31,
+      "parts": [
+        ["cyl", 6, 1, 0, 30, 1, 30, "#18141C"],
+        ["cube", 0, 2, 0, 31, 1, 31, "#C9D3CF"]
       ]
     }
   ]

@@ -12,7 +12,7 @@
 
 ## Done, against the brief
 
-- The house: six items, each with a pursuer; let go before five seconds and it goes back; squeaky footsteps and pick-up sounds and nothing else.
+- The house: seven items, each with a pursuer (the record brings Kanye West); a record player picks the chase music, with its song's name floating over it; let go before five seconds and it goes back; squeaky footsteps and pick-up sounds and nothing else.
 - The fold: the walls fall outward flat, the roof blows away, the pursuer stands up 230 m west and comes.
 - The car: in the garage, entered with E, driven in first person with a rear-view mirror and two door mirrors.
 - The city: 1 km square, Manhattan grid, downtown, mid-rise, suburbs, five hills, one overpass; 19,857 breakable pieces.
@@ -24,8 +24,8 @@
 
 ## Not done, or done differently
 
-- The song is not published (SECOND-ORDER M1); an original tune plays, and a recording can be dropped in through `data/music.json`.
-- The pursuers are original characters, not celebrities (M2).
+- The Hanging Tree (sped up, from 0:54.85) is the default in a local build. It is kept out of the repository, so the deployed game plays the chiptune (SECOND-ORDER M1, M6).
+- Six pursuers are original characters; Kanye West is Sam's addition, from a photograph (M2, M7).
 - No river: the overpass is the bridge (M5).
 - Frame rates on integrated Intel or AMD graphics, and in Firefox and Safari, were not measured.
 
@@ -33,7 +33,7 @@
 
 | Command | Result |
 | --- | --- |
-| `./scripts/check.sh` (three engines) | BUILDER CHECK PASSED: fmt, clippy, 80 core tests and 11 boundary tests (after the second round: pursuer jumps, stilts, rolling, higher seat), wasm build, import audit, browser check in Chromium, Firefox and WebKit |
+| `./scripts/check.sh` (three engines) | BUILDER CHECK PASSED: fmt, clippy, 83 core tests and 11 boundary tests (third round: the record player, Kanye West, the Hanging Tree locally; also checked with the recording absent, as deployed), wasm build, import audit, browser check in Chromium, Firefox and WebKit |
 | `cargo test --release -p pursuer_core --test perf_probe -- --ignored --nocapture` | see `MEASUREMENTS.md` |
 | `python3 tools/shots.py OUT drive|watch|everything` | screenshots and frame rates, Metal GPU |
 

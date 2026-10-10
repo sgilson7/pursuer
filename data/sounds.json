@@ -1,5 +1,5 @@
 {
- "_about": "Every number the page's sound needs. Each recipe is a list of layers: an oscillator sweeping `from` to `to` Hz, or the core's white noise through a filter. Times in seconds. The house is silent but for these: squeaky shoes and the sound of picking a thing up and putting it down. When the pursuer jumps out in front of you: `scare`, a low hit under a screech.",
+ "_about": "Every number the page's sound needs. Each recipe is a list of layers: an oscillator sweeping `from` to `to` Hz, or the core's white noise through a filter. Times in seconds. The house is silent but for these: squeaky shoes and the sound of picking a thing up and putting it down. When the pursuer jumps out in front of you: `scare`, a low hit under a screech. `needle`: the record player's arm dropping onto a new record.",
  "master": 0.5,
  "floor": 0.0001,
  "tail": 0.05,
@@ -149,6 +149,38 @@
     "attack": 0.01,
     "dur": 0.5,
     "gain": 0.12
+   }
+  ],
+  "needle": [
+   {
+    "type": "noise",
+    "filter": "bandpass",
+    "freq": 3200,
+    "q": 2.5,
+    "at": 0,
+    "attack": 0.002,
+    "dur": 0.04,
+    "gain": 0.18
+   },
+   {
+    "type": "noise",
+    "filter": "bandpass",
+    "freq": 1400,
+    "q": 0.9,
+    "at": 0.05,
+    "attack": 0.01,
+    "dur": 0.35,
+    "gain": 0.05
+   },
+   {
+    "type": "osc",
+    "wave": "sine",
+    "from": 180,
+    "to": 120,
+    "at": 0,
+    "attack": 0.003,
+    "dur": 0.08,
+    "gain": 0.08
    }
   ]
  }

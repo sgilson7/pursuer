@@ -51,6 +51,8 @@ const DT: i32 = ONE / 60;
 /// How near an item must be to pick it up, and the car to get in.
 const REACH: i32 = ONE * 26 / 10;
 const CAR_REACH: i32 = ONE * 5;
+/// Within this many metres of the record player its callout shows.
+const PLAYER_CALLOUT: i32 = ONE * 9;
 /// How far a software renderer draws.
 const LOW_FAR: i32 = 320 * ONE;
 /// Mouse sensitivity: angle units per CSS pixel (scaled by 100 at the shim).
@@ -104,6 +106,49 @@ pub fn parse_upgrades(json: &str) -> Result<Vec<Upgrade>, String> {
         .collect()
 }
 
+/// A record on the record player: the chase music.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Track {
+    pub id: String,
+    pub name: String,
+    /// whether the build holds its recording (scripts/build.sh)
+    pub present: bool,
+}
+
+#[derive(Deserialize)]
+struct MusicFile {
+    tracks: Vec<TrackJson>,
+}
+
+#[derive(Deserialize)]
+struct TrackJson {
+    id: String,
+    name: String,
+    #[serde(default = "yes")]
+    present: bool,
+}
+
+fn yes() -> bool {
+    true
+}
+
+pub fn parse_tracks(json: &str) -> Result<Vec<Track>, String> {
+    let f: MusicFile = serde_json::from_str(json).map_err(|e| format!("music.json: {e}"))?;
+    let tracks: Vec<Track> = f
+        .tracks
+        .into_iter()
+        .map(|t| Track {
+            id: t.id,
+            name: t.name,
+            present: t.present,
+        })
+        .collect();
+    if !tracks.iter().any(|t| t.present) {
+        return Err("music.json: no track is present".into());
+    }
+    Ok(tracks)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Dust {
     pos: V3,
@@ -127,6 +172,13 @@ pub struct Game {
     items: Vec<Item>,
     hold_ticks: i32,
     upgrades: Vec<Upgrade>,
+    tracks: Vec<Track>,
+    /// the record on the player: the chase music
+    song: usize,
+    /// counts changes of record, so the page can pop its callout again
+    song_seq: u32,
+    /// looking at the record player
+    aim_player: bool,
     tuning: Tuning,
     terrain: Terrain,
     blueprint: Blueprint,
@@ -208,20 +260,29 @@ impl Game {
         items: &str,
         upgrades: &str,
         pursuer: &str,
+        music: &str,
         saved: &str,
     ) -> Result<Game, String> {
         let pal = Palette::parse(palette)?;
         let (items, hold_seconds) = house::parse_items(items)?;
         let upgrades = parse_upgrades(upgrades)?;
         let tuning = Tuning::parse(pursuer)?;
+        let tracks = parse_tracks(music)?;
         let terrain = Terrain::new();
         let blueprint = city::plan(&terrain, &pal);
         let pristine = Rubble::new(&blueprint);
         let house = House::new(&pal);
         let record: Option<serde_json::Value> = serde_json::from_str(saved).ok();
         let best = record
+            .as_ref()
             .and_then(|r| r.get("best").and_then(|b| b.as_u64()))
             .unwrap_or(0) as u32;
+        let first = tracks.iter().position(|t| t.present).unwrap_or(0);
+        let song = record
+            .as_ref()
+            .and_then(|r| r.get("song").and_then(|s| s.as_str()))
+            .and_then(|id| tracks.iter().position(|t| t.id == id && t.present))
+            .unwrap_or(first);
         let mut g = Game {
             mode: Mode::Title,
             paused: false,
@@ -229,6 +290,10 @@ impl Game {
             items,
             hold_ticks: hold_seconds * 60,
             upgrades,
+            tracks,
+            song,
+            song_seq: 0,
+            aim_player: false,
             tuning,
             city: pristine.clone(),
             pristine,
@@ -296,6 +361,7 @@ impl Game {
         self.monster = None;
         self.fold = -1;
         self.aim = None;
+        self.aim_player = false;
         self.held = None;
         self.hold = 0;
         self.chosen = None;
@@ -372,7 +438,7 @@ impl Game {
     }
 
     pub fn saved(&self) -> String {
-        json!({ "best": self.best }).to_string()
+        json!({ "best": self.best, "song": self.tracks[self.song].id }).to_string()
     }
 
     /// The page's clock (microseconds), the held action bits, and the mouse
@@ -485,34 +551,59 @@ impl Game {
         self.held_bits = bits;
     }
 
-    /// What the walker is looking at: the nearest item whose middle is
-    /// within its radius of the line of sight, and within reach.
-    fn looked_at(&self) -> Option<usize> {
+    /// What the walker is looking at: the nearest item, or the record
+    /// player, whose middle is within its radius of the line of sight and
+    /// within reach. `Some(None)` is the record player.
+    fn looked_at(&self) -> Option<Option<usize>> {
         let eye = self.walker.eye();
         let look = self.walker.look();
-        let mut best: Option<(usize, i32)> = None;
-        for (k, it) in self.items.iter().enumerate() {
-            let rel = it.centre.sub(eye);
+        let things = self
+            .items
+            .iter()
+            .enumerate()
+            .map(|(k, it)| (Some(k), it.centre, it.radius))
+            .chain([(None, house::TURNTABLE, house::TURNTABLE_RADIUS)]);
+        let mut best: Option<(Option<usize>, i32)> = None;
+        for (k, centre, radius) in things {
+            let rel = centre.sub(eye);
             let along = rel.dot(look);
             if along <= 0 || along > REACH {
                 continue;
             }
             let off = rel.sub(look.scale(along)).len();
-            if off <= it.radius + ONE / 10 && best.map(|b| along < b.1).unwrap_or(true) {
+            if off <= radius + ONE / 10 && best.map(|b| along < b.1).unwrap_or(true) {
                 best = Some((k, along));
             }
         }
         best.map(|b| b.0)
     }
 
+    /// The next record the build holds.
+    fn next_song(&mut self) {
+        let n = self.tracks.len();
+        for step in 1..=n {
+            let k = (self.song + step) % n;
+            if self.tracks[k].present {
+                self.song = k;
+                break;
+            }
+        }
+        self.song_seq += 1;
+    }
+
     fn tick_house(&mut self, bits: u32) {
-        self.aim = self.looked_at();
+        let looked = self.looked_at();
+        self.aim = looked.flatten();
+        self.aim_player = looked == Some(None);
         match (self.held, bit(bits, USE)) {
             (None, true) if !bit(self.held_bits, USE) => {
                 if let Some(k) = self.aim {
                     self.held = Some(k);
                     self.hold = 0;
                     self.sounds.push("pickup");
+                } else if self.aim_player {
+                    self.next_song();
+                    self.sounds.push("needle");
                 }
             }
             (Some(_), true) => {
@@ -944,6 +1035,9 @@ impl Game {
         for s in shapes {
             b.push(LAYER_COCKPIT, s.mesh, &s.at, s.rgb, 0);
         }
+        if let Some(a) = it.cover_at(&place) {
+            b.sprite(&a, self.cover_texture(k));
+        }
     }
 
     fn monster_shapes(&self, b: &mut Batch) {
@@ -985,6 +1079,9 @@ impl Game {
                 continue;
             }
             it.shapes(&it.rest(), &mut shapes);
+            if let Some(a) = it.cover_at(&it.rest()) {
+                b.sprite(&a, self.cover_texture(k));
+            }
         }
         for s in shapes {
             b.push(LAYER_WORLD, s.mesh, &s.at, s.rgb, 0);
@@ -995,6 +1092,19 @@ impl Game {
             let ring = render::boxed(
                 it.at.add(V3::UP.scale(ONE / 50)),
                 v3(it.radius * 3, ONE / 50, it.radius * 3),
+            );
+            b.push(
+                LAYER_WORLD,
+                Mesh::Ring,
+                &ring,
+                self.pal.get("window_lit"),
+                crate::city::STYLE_GLOW * ONE,
+            );
+        }
+        if self.aim_player && self.held.is_none() && self.mode == Mode::House {
+            let ring = render::boxed(
+                house::TURNTABLE.add(V3::UP.scale(ONE / 50)),
+                v3(ONE * 6 / 10, ONE / 50, ONE * 6 / 10),
             );
             b.push(
                 LAYER_WORLD,
@@ -1024,7 +1134,7 @@ impl Game {
     fn frame(&mut self) {
         let views = self.layout();
         let batch = self.build_dynamic(&views[0].cam);
-        let (values, runs, sprite) = batch.finish();
+        let (values, runs, sprites) = batch.finish();
         self.dynamic = values;
         self.rects.clear();
         self.mats.clear();
@@ -1049,7 +1159,7 @@ impl Game {
                     push([vi, BUF_DYNAMIC, mesh, off, n, PASS_SOLID, 0]);
                 }
             }
-            if let Some((off, n, tex)) = sprite {
+            for &(off, n, tex) in &sprites {
                 push([vi, BUF_DYNAMIC, Mesh::Card as u32, off, n, PASS_SPRITE, tex]);
             }
             if v.ink {
@@ -1215,11 +1325,17 @@ impl Game {
         self.pal.get("sky").to_vec()
     }
 
+    /// The texture of item `k`'s cover: the page loads every item's pursuer
+    /// first, in order, and then each cover, in the items' order.
+    fn cover_texture(&self, k: usize) -> u32 {
+        (self.items.len() + self.items[..k].iter().filter(|i| i.cover.is_some()).count()) as u32
+    }
+
     pub fn items_json(&self) -> String {
         let list: Vec<serde_json::Value> = self
             .items
             .iter()
-            .map(|i| json!({ "id": i.id, "monster": i.monster, "name": i.name }))
+            .map(|i| json!({ "id": i.id, "monster": i.monster, "name": i.name, "cover": i.cover }))
             .collect();
         serde_json::Value::Array(list).to_string()
     }
@@ -1239,6 +1355,7 @@ impl Game {
         let prompt = match self.mode {
             Mode::House if self.held.is_some() => "holding",
             Mode::House if self.aim.is_some() => "pick",
+            Mode::House if self.aim_player => "record",
             Mode::Chase if near_car => "enter",
             Mode::Chase if !self.driving => "run",
             _ => "",
@@ -1312,6 +1429,20 @@ impl Game {
         } else {
             None
         };
+        // the record player's callout, over it while you are near it in the house
+        let player_marker = if self.mode == Mode::House
+            && self.held.is_none()
+            && self.walker.eye().dist(house::TURNTABLE) < PLAYER_CALLOUT
+        {
+            let aspect = fx::div(self.width.max(1), self.height.max(1));
+            self.views[0]
+                .cam
+                .screen(aspect, house::TURNTABLE.add(V3::UP.scale(ONE * 7 / 10)))
+                .filter(|&(x, y)| x > 0 && x < int(100) && y > 0 && y < int(100))
+                .map(|(x, y)| json!([pct(x), pct(y)]))
+        } else {
+            None
+        };
         let toast = self.toast.map(|(k, _)| {
             let u = &self.upgrades[k];
             json!({ "name": u.name, "text": u.text })
@@ -1349,6 +1480,10 @@ impl Game {
             "next": next,
             "sounds": self.sounds,
             "music": self.mode == Mode::Chase && !self.paused,
+            "song": self.tracks[self.song].name,
+            "song_id": self.tracks[self.song].id,
+            "song_seq": self.song_seq,
+            "player_marker": player_marker,
             "flying": c.flying(),
             "hovering": c.hovering(),
             "upside_down": c.up().y < ONE / 3 && self.driving,
@@ -1430,6 +1565,7 @@ pub(crate) mod tests {
             include_str!("../../../data/items.json"),
             include_str!("../../../data/upgrades.json"),
             include_str!("../../../data/pursuer.json"),
+            include_str!("../../../data/music.json"),
             "",
         )
         .unwrap()
@@ -1558,6 +1694,89 @@ pub(crate) mod tests {
         assert!(g.shake > ONE * 9 / 10, "the view shakes: {}", g.shake);
         let d = g.monster().unwrap().distance(g.player_pos());
         assert!((d - g.tuning.jump_distance).abs() < int(2), "{}", d / ONE);
+    }
+
+    /// Stands the walker in front of the record player, looking at it.
+    fn face_the_record_player(g: &mut Game) {
+        let at = v3(-ONE * 105 / 100, house::FLOOR, -ONE * 380 / 100);
+        let eye = at.add(V3::UP.scale(crate::walker::EYE));
+        let (yaw, pitch) = crate::geom::yaw_pitch_of(house::TURNTABLE.sub(eye));
+        g.place_walker(at, yaw, pitch);
+    }
+
+    #[test]
+    fn the_record_player_changes_the_chase_music_and_the_choice_is_kept() {
+        let mut g = game();
+        g.begin();
+        let mut t = 0;
+        face_the_record_player(&mut g);
+        run(&mut g, 0, 2, &mut t);
+        let hud: serde_json::Value = serde_json::from_str(&g.hud_json()).unwrap();
+        assert_eq!(hud["prompt"], "record");
+        assert_eq!(
+            hud["song_id"], "hanging_tree",
+            "the first record plays by default"
+        );
+        assert!(hud["player_marker"].is_array(), "its callout floats over it");
+        run(&mut g, USE, 2, &mut t);
+        run(&mut g, 0, 2, &mut t);
+        let hud: serde_json::Value = serde_json::from_str(&g.hud_json()).unwrap();
+        assert_eq!(hud["song_id"], "chiptune");
+        assert_eq!(hud["song"], "Pursuer (chiptune)");
+        assert_eq!(hud["song_seq"], 1);
+        assert!(g.held.is_none(), "a press at the player picks nothing up");
+        // kept across a visit
+        let saved = g.saved();
+        let again = Game::new(
+            include_str!("../../../data/palette.json"),
+            include_str!("../../../data/items.json"),
+            include_str!("../../../data/upgrades.json"),
+            include_str!("../../../data/pursuer.json"),
+            include_str!("../../../data/music.json"),
+            &saved,
+        )
+        .unwrap();
+        assert_eq!(again.tracks[again.song].id, "chiptune");
+        // and back round to the first
+        run(&mut g, USE, 2, &mut t);
+        assert_eq!(g.tracks[g.song].id, "hanging_tree");
+    }
+
+    #[test]
+    fn the_records_cover_is_the_texture_after_every_pursuer() {
+        let g = game();
+        let k = g.items.iter().position(|i| i.id == "vinyl").unwrap();
+        assert_eq!(g.cover_texture(k), g.items.len() as u32);
+        let list: serde_json::Value = serde_json::from_str(&g.items_json()).unwrap();
+        assert_eq!(list[k]["cover"], "vinyl");
+        assert_eq!(list[k]["monster"], "kanye");
+        let mut b = Batch::new();
+        let place = g.items[k].rest();
+        b.sprite(&g.items[k].cover_at(&place).unwrap(), g.cover_texture(k));
+        let (_, _, sprites) = b.finish();
+        assert_eq!(sprites[0].2, 7);
+    }
+
+    #[test]
+    fn a_record_the_build_lacks_is_skipped() {
+        let music = include_str!("../../../data/music.json")
+            .replace("\"rate\": 1", "\"rate\": 1, \"present\": false");
+        let g = Game::new(
+            include_str!("../../../data/palette.json"),
+            include_str!("../../../data/items.json"),
+            include_str!("../../../data/upgrades.json"),
+            include_str!("../../../data/pursuer.json"),
+            &music,
+            r#"{"best": 0, "song": "hanging_tree"}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            g.tracks[g.song].id, "chiptune",
+            "the default falls to a record that is there"
+        );
+        let mut g = g;
+        g.next_song();
+        assert_eq!(g.tracks[g.song].id, "chiptune", "and the player stays on it");
     }
 
     #[test]
