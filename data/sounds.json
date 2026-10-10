@@ -1,5 +1,5 @@
 {
- "_about": "Every number the page's sound needs. Each recipe is a list of layers: an oscillator sweeping `from` to `to` Hz, or the core's white noise through a filter. Times in seconds. The house is silent but for these: squeaky shoes and the sound of picking a thing up and putting it down.",
+ "_about": "Every number the page's sound needs. Each recipe is a list of layers: an oscillator sweeping `from` to `to` Hz, or the core's white noise through a filter. Times in seconds. The house is silent but for these: squeaky shoes and the sound of picking a thing up and putting it down. When the pursuer jumps out in front of you: `scare`, a low hit under a screech.",
  "master": 0.5,
  "floor": 0.0001,
  "tail": 0.05,
@@ -97,6 +97,58 @@
     "attack": 0.003,
     "dur": 0.08,
     "gain": 0.06
+   }
+  ],
+  "scare": [
+   {
+    "type": "noise",
+    "filter": "lowpass",
+    "freq": 180,
+    "q": 0.7,
+    "at": 0,
+    "attack": 0.004,
+    "dur": 0.6,
+    "gain": 0.9
+   },
+   {
+    "type": "osc",
+    "wave": "sine",
+    "from": 110,
+    "to": 38,
+    "at": 0,
+    "attack": 0.004,
+    "dur": 0.7,
+    "gain": 0.6
+   },
+   {
+    "type": "osc",
+    "wave": "sawtooth",
+    "from": 1900,
+    "to": 1450,
+    "at": 0.02,
+    "attack": 0.01,
+    "dur": 0.9,
+    "gain": 0.12
+   },
+   {
+    "type": "osc",
+    "wave": "sawtooth",
+    "from": 2010,
+    "to": 1520,
+    "at": 0.02,
+    "attack": 0.01,
+    "dur": 0.9,
+    "gain": 0.1
+   },
+   {
+    "type": "noise",
+    "filter": "highpass",
+    "freq": 3000,
+    "q": 0.7,
+    "at": 0.02,
+    "attack": 0.01,
+    "dur": 0.5,
+    "gain": 0.12
    }
   ]
  }

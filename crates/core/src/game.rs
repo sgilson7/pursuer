@@ -26,6 +26,12 @@ use crate::walker::{Legs, Walker};
 use serde::Deserialize;
 use serde_json::json;
 
+/// The driver's eye above the car's middle: high in the seat, so the road
+/// ahead shows over the dash.
+const SEAT_EYE: i32 = ONE * 82 / 100;
+/// How long the view shakes after the pursuer jumps in front of you.
+const SCARE_TICKS: i32 = 50;
+
 pub const FORWARD: u32 = 1;
 pub const BACK: u32 = 2;
 pub const LEFT: u32 = 4;
@@ -37,6 +43,7 @@ pub const USE: u32 = 128;
 pub const SHIFT: u32 = 256;
 /// set by the page while the game has the pointer
 pub const FOCUS: u32 = 512;
+pub const BIG: u32 = 1024;
 
 const TICK_US: i64 = 1_000_000 / 60;
 const MAX_TICKS_PER_FRAME: i32 = 4;
@@ -148,6 +155,8 @@ pub struct Game {
     look_pitch: i32,
     look_idle: i32,
     shake: i32,
+    /// ticks left of the jolt from the pursuer jumping in front of you
+    scare: i32,
     clock: Option<i64>,
     acc: i64,
     width: i32,
@@ -163,6 +172,9 @@ pub struct Game {
     views: Vec<View>,
     dirty: Vec<u32>,
     held_bits: u32,
+    /// keys down on a display frame that ran no tick, for the next tick: a
+    /// tap released before then still counts
+    pending_bits: u32,
     title_angle: i32,
     /// drawing on a software renderer: no outlines, a shorter view, one mirror
     low: bool,
@@ -243,6 +255,7 @@ impl Game {
             look_pitch: 0,
             look_idle: 0,
             shake: 0,
+            scare: 0,
             clock: None,
             acc: 0,
             width: 1280,
@@ -257,6 +270,7 @@ impl Game {
             views: Vec::new(),
             dirty: Vec::new(),
             held_bits: 0,
+            pending_bits: 0,
             title_angle: 0,
             low: false,
         };
@@ -292,6 +306,7 @@ impl Game {
         self.dust.clear();
         self.look_yaw = 0;
         self.look_pitch = 0;
+        self.scare = 0;
         // let the car settle on its wheels
         for _ in 0..90 {
             self.car
@@ -382,7 +397,8 @@ impl Game {
             self.acc -= TICK_US;
             n += 1;
             if live {
-                self.tick(bits);
+                self.tick(bits | self.pending_bits);
+                self.pending_bits = 0;
             } else if !self.paused {
                 // the rubble settles behind the title and the verdict
                 let focus = self.player_pos();
@@ -396,6 +412,9 @@ impl Game {
         // that runs no tick must not swallow a key's press
         if !live {
             self.held_bits = 0;
+            self.pending_bits = 0;
+        } else if n == 0 {
+            self.pending_bits |= bits;
         }
         self.frame();
     }
@@ -536,6 +555,7 @@ impl Game {
                 hover: bit(bits, JUMP),
                 fly: bit(bits, FLY),
                 flip: bit(bits, FLIP),
+                big: bit(bits, BIG),
             };
             self.car.step(c, &self.terrain, &mut self.city, DT);
             self.look_idle += 1;
@@ -552,9 +572,23 @@ impl Game {
             }
         }
         let target = self.player_pos();
+        let heading = if self.driving {
+            let v = self.car.body.vel;
+            if v.len_xz() > int(4) {
+                v
+            } else {
+                self.car.fwd()
+            }
+        } else {
+            facing(self.walker.yaw, 0)
+        };
         if let Some(m) = self.monster.as_mut() {
-            m.step(target, &self.terrain, &mut self.city, DT);
+            if m.step(target, heading, &self.terrain, &mut self.city, DT) {
+                self.sounds.push("scare");
+                self.scare = SCARE_TICKS;
+            }
         }
+        self.scare = (self.scare - 1).max(0);
         self.city.step(&self.terrain, DT, target);
         for b in self.city.bursts.drain(..) {
             for _ in 0..2 {
@@ -613,7 +647,8 @@ impl Game {
             .monster
             .as_ref()
             .map(|m| ONE - fx::div(m.distance(target).min(int(90)), int(90)))
-            .unwrap_or(0);
+            .unwrap_or(0)
+            .max(fx::div(self.scare, SCARE_TICKS));
     }
 
     // ---- the frame ----
@@ -652,9 +687,9 @@ impl Game {
                 let b = &self.car.body;
                 let eye = b.pos.add(from_local(
                     &b.basis,
-                    v3(-ONE * 40 / 100, ONE * 58 / 100, ONE * 30 / 100),
+                    v3(-ONE * 40 / 100, SEAT_EYE, ONE * 30 / 100),
                 ));
-                let fwd = from_local(&b.basis, facing(self.look_yaw, self.look_pitch - deg(4)));
+                let fwd = from_local(&b.basis, facing(self.look_yaw, self.look_pitch - deg(7)));
                 let up = b.basis[1].add(V3::UP).norm();
                 let jolt = self.jitter(ONE / 30);
                 Camera {
@@ -809,11 +844,21 @@ impl Game {
         );
         part(LAYER_CAR, Mesh::Cube, o(0, 12, 0), o(194, 8, 300), trim, b);
         // wheels: a cylinder on its side, turned by the steering, spun by the road
-        let tune = c.kit.tune();
-        for (k, m) in car::MOUNTS.iter().enumerate() {
+        let tune = c.tune();
+        for (k, m) in tune.mounts().iter().enumerate() {
             let centre = m.sub(v3(0, c.travel[k], 0));
+            if c.travel[k] > ONE {
+                // the big wheels' stilts
+                let strut = Affine::translate(m.add(centre).scale(ONE / 2)).then(&Affine::scale(v3(
+                    ONE / 5,
+                    c.travel[k],
+                    ONE / 5,
+                )));
+                b.push(LAYER_CAR, Mesh::Cyl, &place.then(&strut), trim, 0);
+            }
             let steer = if k < 2 { c.steer } else { 0 };
             let d = tune.radius * 2;
+            let width = tune.radius * 4 / 10 + ONE / 6;
             let wheel = Affine::translate(centre)
                 .then(&Affine::rot_y(steer))
                 .then(&Affine::rot_x(-c.spin))
@@ -821,7 +866,7 @@ impl Game {
             b.push(
                 LAYER_CAR,
                 Mesh::Cyl,
-                &place.then(&wheel).then(&Affine::scale(v3(d, ONE * 32 / 100, d))),
+                &place.then(&wheel).then(&Affine::scale(v3(d, width, d))),
                 self.pal.get("tire"),
                 0,
             );
@@ -830,7 +875,7 @@ impl Game {
                 Mesh::Cyl,
                 &place
                     .then(&wheel)
-                    .then(&Affine::scale(v3(d / 2, ONE * 34 / 100, d / 2))),
+                    .then(&Affine::scale(v3(d / 2, width + ONE / 50, d / 2))),
                 self.pal.get("hub"),
                 0,
             );
@@ -1234,7 +1279,14 @@ impl Game {
                 car::FLY_RECHARGE,
             ),
             json!({ "id": "flip", "state": if c.flipping { "active" } else { "ready" }, "level": "100.00%" }),
-            json!({ "id": "big_wheels", "state": if c.kit.big_wheels { "ready" } else { "locked" }, "level": "100.00%" }),
+            ability(
+                "big_wheels",
+                c.kit.big_wheels,
+                c.big_left,
+                c.big_wait,
+                car::BIG_TICKS,
+                car::BIG_RECHARGE,
+            ),
         ];
         let mirrors: Vec<serde_json::Value> = self
             .views
@@ -1360,7 +1412,7 @@ pub fn numbers() -> String {
         "uniforms": [["uLightDir", 3], ["uSky", 3], ["uFog", 3], ["uLight", 3], ["uWindowDark", 3], ["uWindowLit", 3], ["uInk", 3], ["uFogRange", 2], ["uInkSize", 3]],
         "actions": {
             "forward": FORWARD, "back": BACK, "left": LEFT, "right": RIGHT, "jump": JUMP, "fly": FLY,
-            "flip": FLIP, "use": USE, "shift": SHIFT, "focus": FOCUS
+            "flip": FLIP, "use": USE, "shift": SHIFT, "focus": FOCUS, "big": BIG
         },
         "terrain_cells": terrain::N,
         "rubble_full": rubble::FULL,
@@ -1465,6 +1517,47 @@ pub(crate) mod tests {
         g.advance(t + TICK_US / 4, USE | FOCUS, 0, 0);
         run(&mut g, USE, 2, &mut t);
         assert!(g.held.is_some(), "the press reached the house");
+    }
+
+    #[test]
+    fn a_tap_let_go_before_any_tick_ran_still_counts() {
+        let mut g = game();
+        g.begin();
+        let mut t = 0;
+        // into the chase and into the car
+        run(&mut g, USE, 60 * 6, &mut t);
+        g.walker.pos = g.car.body.pos;
+        run(&mut g, 0, 2, &mut t);
+        run(&mut g, USE, 2, &mut t);
+        assert!(g.driving());
+        g.car.kit.big_wheels = true;
+        // Q down and up within one display frame that ran no tick
+        g.advance(t + TICK_US / 4, BIG | FOCUS, 0, 0);
+        run(&mut g, 0, 2, &mut t);
+        assert!(g.car().big_left > 0, "the big wheels came out");
+    }
+
+    #[test]
+    fn the_pursuer_jumping_in_front_of_you_stings_and_shakes_the_view() {
+        let mut g = game();
+        g.begin();
+        let mut t = 0;
+        run(&mut g, USE, 60 * 6, &mut t);
+        let you = g.player_pos();
+        let m = g.monster.as_mut().unwrap();
+        m.age = 60 * 30;
+        m.pos = you.add(v3(int(300), 0, 0));
+        m.jump_in = 1;
+        run(&mut g, 0, 1, &mut t);
+        let hud: serde_json::Value = serde_json::from_str(&g.hud_json()).unwrap();
+        assert!(
+            hud["sounds"].as_array().unwrap().iter().any(|s| s == "scare"),
+            "{}",
+            hud["sounds"]
+        );
+        assert!(g.shake > ONE * 9 / 10, "the view shakes: {}", g.shake);
+        let d = g.monster().unwrap().distance(g.player_pos());
+        assert!((d - g.tuning.jump_distance).abs() < int(2), "{}", d / ONE);
     }
 
     #[test]

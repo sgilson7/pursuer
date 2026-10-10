@@ -17,7 +17,8 @@
 - The car: in the garage, entered with E, driven in first person with a rear-view mirror and two door mirrors.
 - The city: 1 km square, Manhattan grid, downtown, mid-rise, suburbs, five hills, one overpass; 19,857 breakable pieces.
 - Destruction: the sweep, supports, whole-building collapse, spans that need both pillars, loose pieces that tumble and sleep.
-- Upgrades by time survived: big wheels, hover (3 s), turbo, wings (5 s), more turbo; R rolls the car over; no fall damage.
+- Upgrades by time survived: big wheels (Q, 8 s on stilts over fallen blocks), hover (3 s), turbo, wings (5 s), more turbo; R rolls the car over; no fall damage.
+- The car rolls over in too hard a turn at speed. The pursuer speeds up to 75 m/s and, every 25 to 45 s, jumps to 120 m ahead of you.
 - Score: time survived, best kept in local storage.
 - Performance: 60 frames a second in Chromium on an Apple Silicon Mac during a chase and with the whole city loose (`MEASUREMENTS.md`).
 
@@ -32,7 +33,7 @@
 
 | Command | Result |
 | --- | --- |
-| `./scripts/check.sh` (three engines) | BUILDER CHECK PASSED: fmt, clippy, 76 core tests and 11 boundary tests, wasm build, import audit, browser check in Chromium, Firefox and WebKit |
+| `./scripts/check.sh` (three engines) | BUILDER CHECK PASSED: fmt, clippy, 80 core tests and 11 boundary tests (after the second round: pursuer jumps, stilts, rolling, higher seat), wasm build, import audit, browser check in Chromium, Firefox and WebKit |
 | `cargo test --release -p pursuer_core --test perf_probe -- --ignored --nocapture` | see `MEASUREMENTS.md` |
 | `python3 tools/shots.py OUT drive|watch|everything` | screenshots and frame rates, Metal GPU |
 

@@ -36,7 +36,7 @@
  "key_hover": "Space",
  "key_wings": "F",
  "key_flip": "R",
- "key_big_wheels": "",
+ "key_big_wheels": "Q",
  "no_webgl": "This browser cannot draw WebGL 2, which Pursuer needs.",
  "controls": [
   [
@@ -62,6 +62,10 @@
   [
    "Space",
    "Jump, or hover once the car can"
+  ],
+  [
+   "Q",
+   "Big wheels, once the car has them"
   ],
   [
    "F",

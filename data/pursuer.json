@@ -1,15 +1,21 @@
 {
-  "_about": "How the pursuer moves. Speeds in metres a second, times in seconds, sizes in metres. It rises `spawn_distance` metres west of the house, takes `rise_seconds` to stand up and waits `wait_seconds` more, then walks straight at you through anything in the way, gaining `accel` m/s every second up to `max_speed`, turning at most `turn_degrees` a second. Further than `catchup_distance` away it moves `catchup_percent` faster, so it is always in the mirror.",
+  "_about": "How the pursuer moves. Speeds in metres a second, times in seconds, sizes in metres. It rises `spawn_distance` metres west of the house, takes `rise_seconds` to stand up and waits `wait_seconds` more, then walks straight at you through anything in the way, gaining `accel` m/s every second up to `max_speed`, turning at most `turn_degrees` a second. Further than `catchup_distance` away it moves `catchup_percent` faster, so it is always in the mirror. Every `jump_every_min_seconds` to `jump_every_max_seconds` (the first after `jump_first_seconds`) it vanishes and pops up `jump_distance` metres straight ahead of you, standing in `jump_rise_seconds` and holding still for `jump_hold_seconds` before it walks again. It only jumps when it is further away than that, so a jump always brings it closer.",
   "spawn_distance": 230,
   "rise_seconds": 2.5,
   "wait_seconds": 1.5,
   "start_speed": 9,
-  "accel": 0.16,
-  "max_speed": 46,
+  "accel": 0.25,
+  "max_speed": 75,
   "turn_degrees": 32,
   "catchup_distance": 240,
   "catchup_percent": 60,
   "width": 40,
   "height": 60,
-  "reach_percent": 70
+  "reach_percent": 70,
+  "jump_first_seconds": 35,
+  "jump_every_min_seconds": 25,
+  "jump_every_max_seconds": 45,
+  "jump_distance": 120,
+  "jump_rise_seconds": 0.3,
+  "jump_hold_seconds": 1.2
 }

@@ -67,7 +67,7 @@ with sync_playwright() as p:
         pg.click("#begin")
     pg.wait_for_timeout(1200)
     shot("house")
-    if SCRIPT in ("intro", "chase", "drive"):
+    if SCRIPT in ("intro", "chase", "drive", "stunts"):
         pg.keyboard.down("KeyE")
         pg.wait_for_timeout(2500)
         shot("holding")
@@ -76,7 +76,7 @@ with sync_playwright() as p:
         shot("fold")
         pg.wait_for_timeout(2500)
         shot("folded")
-    if SCRIPT in ("chase", "drive"):
+    if SCRIPT in ("chase", "drive", "stunts"):
         turn(-2041, -150)
         shot("turned")
         pg.wait_for_timeout(3000)
@@ -98,7 +98,7 @@ with sync_playwright() as p:
         pg.wait_for_function("() => document.body.dataset.mode === 'caught'", timeout=60000)
         pg.wait_for_timeout(1500)
         shot("caught")
-    if SCRIPT == "drive":
+    if SCRIPT in ("drive", "stunts"):
         hold("KeyW", 2600)
         shot("walked")
         for _ in range(4):
@@ -110,8 +110,23 @@ with sync_playwright() as p:
         hold("KeyW", 4000)
         shot("driving2")
         fps("driving")
-        pg.wait_for_timeout(8000)
-        shot("later")
+        if SCRIPT == "drive":
+            pg.wait_for_timeout(8000)
+            shot("later")
+    if SCRIPT == "stunts":
+        # big wheels arrive at 25 s and the first jump comes about 39 s in:
+        # drive on, steering a little, and look every second and a half
+        pg.keyboard.down("KeyW")
+        for k in range(30):
+            if k % 5 == 2:
+                hold("KeyA", 250)
+            if k == 10:
+                pg.keyboard.press("KeyQ")
+            pg.wait_for_timeout(1500)
+            hud = pg.evaluate("() => document.getElementById('h-distance').textContent")
+            shot(f"stunt{k:02d}")
+            print("  distance", hud)
+        pg.keyboard.up("KeyW")
     print("\n".join(logs[-30:]))
     hud = pg.evaluate("() => document.body.dataset.mode")
     b.close()
