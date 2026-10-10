@@ -95,6 +95,9 @@ with sync_playwright() as p:
             pg.wait_for_timeout(2500)
             shot(f"watch{k}")
             fps(f"watch{k}")
+        pg.wait_for_function("() => document.body.dataset.mode === 'caught'", timeout=60000)
+        pg.wait_for_timeout(1500)
+        shot("caught")
     if SCRIPT == "drive":
         hold("KeyW", 2600)
         shot("walked")
