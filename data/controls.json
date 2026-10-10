@@ -1,0 +1,17 @@
+{
+  "KeyW": "forward",
+  "KeyS": "back",
+  "KeyA": "left",
+  "KeyD": "right",
+  "ArrowUp": "forward",
+  "ArrowDown": "back",
+  "ArrowLeft": "left",
+  "ArrowRight": "right",
+  "Space": "jump",
+  "KeyF": "fly",
+  "KeyR": "flip",
+  "KeyE": "use",
+  "Mouse0": "use",
+  "ShiftLeft": "shift",
+  "ShiftRight": "shift"
+}

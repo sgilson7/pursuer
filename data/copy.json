@@ -1,0 +1,79 @@
+{
+ "_about": "Every word the page shows that is not an item's or an upgrade's (those are in items.json and upgrades.json).",
+ "title": "Pursuer",
+ "subtitle": "Don't hold on to anything for too long.",
+ "begin": "Go inside",
+ "best_label": "Longest escape",
+ "controls_heading": "Controls",
+ "credit": "Made by Sam Gilson. Built with Builder: a Rust core, a WebAssembly shim and a WebGL page. Art drawn in TikZ.",
+ "music_note": "The chase music is an original tune played by the page.",
+ "click_to_play": "Click to play",
+ "paused": "Paused",
+ "resume": "Resume",
+ "quit": "Back to the title",
+ "caught_title": "Caught",
+ "caught_by": "Caught by",
+ "survived": "You lasted",
+ "new_best": "A new best",
+ "pieces_loosed": "pieces of the city knocked loose",
+ "again": "Go back inside",
+ "to_title": "Title",
+ "hud_best": "best",
+ "unit_m": "m",
+ "unit_kmh": "km/h",
+ "marker_car": "Car",
+ "prompt_pick": "Hold E to pick up {item}",
+ "prompt_holding": "Holding {item}. Let go of E to put it down.",
+ "prompt_enter": "Press E to get in the car",
+ "prompt_run": "Run to the car in the garage",
+ "flip_hint": "Upside down? Hold R to roll over.",
+ "next_label": "Next:",
+ "next_in": "in",
+ "ability_hover": "Hover",
+ "ability_wings": "Wings",
+ "ability_flip": "Roll over",
+ "ability_big_wheels": "Big wheels",
+ "key_hover": "Space",
+ "key_wings": "F",
+ "key_flip": "R",
+ "key_big_wheels": "",
+ "no_webgl": "This browser cannot draw WebGL 2, which Pursuer needs.",
+ "controls": [
+  [
+   "W A S D",
+   "Walk, or drive"
+  ],
+  [
+   "Mouse",
+   "Look"
+  ],
+  [
+   "E or left click (hold)",
+   "Pick something up; get in the car"
+  ],
+  [
+   "Shift",
+   "Run, or handbrake"
+  ],
+  [
+   "R (hold)",
+   "Roll the car back onto its wheels"
+  ],
+  [
+   "Space",
+   "Jump, or hover once the car can"
+  ],
+  [
+   "F",
+   "Fly, once the car can"
+  ],
+  [
+   "Esc",
+   "Pause"
+  ],
+  [
+   "N",
+   "Sound on or off"
+  ]
+ ]
+}

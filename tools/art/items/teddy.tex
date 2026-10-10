@@ -1,0 +1,160 @@
+\documentclass[tikz,border=0pt]{standalone}
+\usepackage{xcolor}
+% Palette: Sam_Comm_final.png by eye, and the cast's own colours.
+\definecolor{ink}{HTML}{3B2340}
+\definecolor{sky}{HTML}{EFC46A}
+\definecolor{skyhi}{HTML}{F5DA92}
+\definecolor{skylow}{HTML}{E9B060}
+\definecolor{cloud}{HTML}{F2D58A}
+\definecolor{wallA}{HTML}{E88A73}
+\definecolor{wallB}{HTML}{EE9F7E}
+\definecolor{wallC}{HTML}{E47A7E}
+\definecolor{wallD}{HTML}{F0B07E}
+\definecolor{wallE}{HTML}{D9765F}
+\definecolor{wallF}{HTML}{E99A8A}
+\definecolor{greenA}{HTML}{8DBB7E}
+\definecolor{greenB}{HTML}{6FA77A}
+\definecolor{greenC}{HTML}{A9C97F}
+\definecolor{greenD}{HTML}{5E9C6A}
+\definecolor{window}{HTML}{F6E7A0}
+\definecolor{windark}{HTML}{8C5A64}
+\definecolor{metal}{HTML}{8D9A93}
+\definecolor{metaldark}{HTML}{5E6B66}
+\definecolor{wood}{HTML}{B9835A}
+\definecolor{paving}{HTML}{E2BD8C}
+\definecolor{ground}{HTML}{D3A77D}
+\definecolor{stone}{HTML}{E7C9A0}
+\definecolor{road}{HTML}{C9957A}
+\definecolor{roadline}{HTML}{F3DFA8}
+\definecolor{paper}{HTML}{F6E7C4}
+\definecolor{paperdark}{HTML}{E3CC98}
+\definecolor{cardboard}{HTML}{C9A06A}
+\definecolor{cardboarddark}{HTML}{A47C4C}
+\definecolor{cutedge}{HTML}{A8998A}
+\definecolor{magenta}{HTML}{FF2E88}
+\definecolor{cyan}{HTML}{13CFE3}
+\definecolor{gold}{HTML}{FFB000}
+\definecolor{trim}{HTML}{F26B38}
+\definecolor{violet}{HTML}{7B2FF7}
+\definecolor{skin}{HTML}{E8B07C}
+\definecolor{skinB}{HTML}{C98B5E}
+\definecolor{skinC}{HTML}{F2C9A0}
+\definecolor{skinshade}{HTML}{D4956A}
+\definecolor{eyewhite}{HTML}{FBF4E4}
+\definecolor{mouth}{HTML}{5A2238}
+\definecolor{teeth}{HTML}{FBF4E4}
+\definecolor{blush}{HTML}{F08A8A}
+\definecolor{hairdark}{HTML}{2A1E33}
+\definecolor{leather}{HTML}{33293D}
+\definecolor{leatherhi}{HTML}{54466A}
+\definecolor{denim}{HTML}{46597A}
+\definecolor{guitar}{HTML}{D2463C}
+\definecolor{goldbelt}{HTML}{F2B53A}
+\definecolor{golddark}{HTML}{C98A1E}
+\definecolor{red}{HTML}{B3262E}
+\definecolor{royal}{HTML}{5E3A87}
+\definecolor{fur}{HTML}{C98A55}
+\definecolor{furlight}{HTML}{EBC592}
+\definecolor{bow}{HTML}{E2577A}
+\definecolor{patch}{HTML}{6FA77A}
+\definecolor{chef}{HTML}{F6EBD2}
+\definecolor{chefdark}{HTML}{D9C7A0}
+\definecolor{shirt}{HTML}{5FA8A0}
+\definecolor{check}{HTML}{9AA3A0}
+\definecolor{toast}{HTML}{E9B55E}
+\definecolor{crust}{HTML}{A8693C}
+\definecolor{butter}{HTML}{F7DE6A}
+\definecolor{tux}{HTML}{2E2638}
+\definecolor{tuxhi}{HTML}{4F4460}
+\definecolor{shirtwhite}{HTML}{F8F0DE}
+\definecolor{chrome}{HTML}{C9D3CF}
+\definecolor{chromedark}{HTML}{7F8C88}
+\definecolor{velvet}{HTML}{A8324A}
+\definecolor{ermine}{HTML}{F7F0DF}
+\definecolor{gown}{HTML}{5E9C6A}
+\definecolor{hairq}{HTML}{CFC6D8}
+\definecolor{jewelB}{HTML}{13A6C9}
+\definecolor{car}{HTML}{4FA3A5}
+\definecolor{cardark}{HTML}{2F7476}
+\definecolor{tyre}{HTML}{3E3A46}
+\definecolor{glass}{HTML}{A9D4CB}
+\definecolor{lamp}{HTML}{FFE6A3}
+\definecolor{smoke}{HTML}{E8D3AE}
+\definecolor{shingle}{HTML}{C9604F}
+\begin{document}
+\begin{tikzpicture}
+\clip (0,0) rectangle (4,4);
+\filldraw[draw=ink, line width=1.6pt, line join=round, fill=fur] (1.424,3.483) circle (0.245);
+\filldraw[draw=ink, line width=1.6pt, line join=round, fill=furlight] (1.424,3.483) circle (0.135);
+\filldraw[draw=ink, line width=1.6pt, line join=round, fill=fur] (2.576,3.483) circle (0.245);
+\filldraw[draw=ink, line width=1.6pt, line join=round, fill=furlight] (2.576,3.483) circle (0.135);
+\filldraw[draw=ink, line width=1.6pt, line join=round, fill=fur] plot[smooth cycle, tension=0.3] coordinates {(1.547,2.042) (1.244,1.743) (1.2,1.563) (0.864,1.63) (0.919,1.94) (1.228,2.327)};
+\filldraw[draw=ink, line width=1.6pt, line join=round, fill=fur] (1.032,1.56) circle (0.176);
+\filldraw[draw=ink, line width=1.6pt, line join=round, fill=furlight] (1.032,1.535) circle (0.098);
+\filldraw[draw=ink, line width=1.6pt, line join=round, fill=fur] plot[smooth cycle, tension=0.3] coordinates {(2.772,2.327) (3.081,1.94) (3.136,1.63) (2.8,1.563) (2.756,1.743) (2.453,2.042)};
+\filldraw[draw=ink, line width=1.6pt, line join=round, fill=fur] (2.968,1.56) circle (0.176);
+\filldraw[draw=ink, line width=1.6pt, line join=round, fill=furlight] (2.968,1.535) circle (0.098);
+\filldraw[draw=ink, line width=1.6pt, line join=round, fill=fur] plot[smooth cycle, tension=0.55] coordinates {(1.902,0.58) (1.886,0.679) (1.839,0.768) (1.766,0.839) (1.673,0.885) (1.571,0.901) (1.469,0.885) (1.377,0.839) (1.304,0.768) (1.257,0.679) (1.24,0.58) (1.257,0.481) (1.304,0.391) (1.377,0.32) (1.469,0.275) (1.571,0.259) (1.673,0.275) (1.766,0.32) (1.839,0.391) (1.886,0.481)};
+\filldraw[draw=ink, line width=1.6pt, line join=round, fill=fur] plot[smooth cycle, tension=0.55] coordinates {(2.76,0.58) (2.743,0.679) (2.696,0.768) (2.623,0.839) (2.531,0.885) (2.429,0.901) (2.327,0.885) (2.234,0.839) (2.161,0.768) (2.114,0.679) (2.098,0.58) (2.114,0.481) (2.161,0.391) (2.234,0.32) (2.327,0.275) (2.429,0.259) (2.531,0.275) (2.623,0.32) (2.696,0.391) (2.743,0.481)};
+\filldraw[draw=ink, line width=1.6pt, line join=round, fill=fur] plot[smooth cycle, tension=0.55] coordinates {(2.772,1.597) (2.734,1.861) (2.624,2.101) (2.454,2.29) (2.238,2.412) (2,2.454) (1.762,2.412) (1.546,2.29) (1.376,2.101) (1.266,1.861) (1.228,1.597) (1.266,1.332) (1.376,1.092) (1.546,0.903) (1.762,0.781) (2,0.739) (2.238,0.781) (2.454,0.903) (2.624,1.092) (2.734,1.332)};
+\filldraw[draw=ink, line width=1.6pt, line join=round, fill=furlight] plot[smooth cycle, tension=0.55] coordinates {(2.478,1.498) (2.454,1.676) (2.387,1.837) (2.281,1.964) (2.148,2.046) (2,2.074) (1.852,2.046) (1.719,1.964) (1.613,1.837) (1.546,1.676) (1.522,1.498) (1.546,1.321) (1.613,1.16) (1.719,1.033) (1.852,0.951) (2,0.923) (2.148,0.951) (2.281,1.033) (2.387,1.16) (2.454,1.321)};
+\draw[ink, line width=0.319pt, line cap=round, line join=round, dash pattern=on 4pt off 3pt] (2,2.062) -- (2,0.935);
+\filldraw[draw=ink, line width=1.6pt, line join=round, fill=furlight] plot[smooth cycle, tension=0.55] coordinates {(1.792,0.482) (1.781,0.536) (1.75,0.585) (1.701,0.624) (1.639,0.65) (1.571,0.658) (1.503,0.65) (1.442,0.624) (1.393,0.585) (1.362,0.536) (1.351,0.482) (1.362,0.427) (1.393,0.378) (1.442,0.339) (1.503,0.314) (1.571,0.305) (1.639,0.314) (1.701,0.339) (1.75,0.378) (1.781,0.427)};
+\filldraw[draw=ink, line width=0.96pt, line join=round, fill=fur] (1.478,0.626) circle (0.032);
+\filldraw[draw=ink, line width=0.96pt, line join=round, fill=fur] (1.571,0.646) circle (0.032);
+\filldraw[draw=ink, line width=0.96pt, line join=round, fill=fur] (1.664,0.626) circle (0.032);
+\filldraw[draw=ink, line width=1.6pt, line join=round, fill=furlight] plot[smooth cycle, tension=0.55] coordinates {(2.649,0.482) (2.638,0.536) (2.607,0.585) (2.558,0.624) (2.497,0.65) (2.429,0.658) (2.361,0.65) (2.299,0.624) (2.25,0.585) (2.219,0.536) (2.208,0.482) (2.219,0.427) (2.25,0.378) (2.299,0.339) (2.361,0.314) (2.429,0.305) (2.497,0.314) (2.558,0.339) (2.607,0.378) (2.638,0.427)};
+\filldraw[draw=ink, line width=0.96pt, line join=round, fill=fur] (2.336,0.626) circle (0.032);
+\filldraw[draw=ink, line width=0.96pt, line join=round, fill=fur] (2.429,0.646) circle (0.032);
+\filldraw[draw=ink, line width=0.96pt, line join=round, fill=fur] (2.522,0.626) circle (0.032);
+\filldraw[draw=ink, line width=1.6pt, line join=round, fill=patch] (2.31,0.934) -- (2.574,0.99) -- (2.523,1.23) -- (2.259,1.174) -- cycle;
+\draw[ink, line width=0.294pt, line cap=round, line join=round] (2.288,0.899) -- (2.333,0.969);
+\draw[ink, line width=0.294pt, line cap=round, line join=round] (2.275,0.957) -- (2.345,0.912);
+\draw[ink, line width=0.294pt, line cap=round, line join=round] (2.551,0.955) -- (2.596,1.025);
+\draw[ink, line width=0.294pt, line cap=round, line join=round] (2.539,1.013) -- (2.609,0.968);
+\draw[ink, line width=0.294pt, line cap=round, line join=round] (2.5,1.195) -- (2.545,1.265);
+\draw[ink, line width=0.294pt, line cap=round, line join=round] (2.488,1.252) -- (2.558,1.207);
+\draw[ink, line width=0.294pt, line cap=round, line join=round] (2.237,1.139) -- (2.282,1.209);
+\draw[ink, line width=0.294pt, line cap=round, line join=round] (2.224,1.196) -- (2.294,1.151);
+\filldraw[draw=ink, line width=1.6pt, line join=round, fill=fur] plot[smooth cycle, tension=0.55] coordinates {(2.735,3.005) (2.699,3.195) (2.595,3.365) (2.432,3.501) (2.227,3.588) (2,3.618) (1.773,3.588) (1.568,3.501) (1.405,3.365) (1.301,3.195) (1.265,3.005) (1.301,2.816) (1.405,2.645) (1.568,2.51) (1.773,2.423) (2,2.393) (2.227,2.423) (2.432,2.51) (2.595,2.645) (2.699,2.816)};
+\draw[ink, line width=0.319pt, line cap=round, line join=round, dash pattern=on 4pt off 3pt] (2,3.618) -- (2,3.348);
+\filldraw[draw=ink, line width=1.6pt, line join=round, fill=furlight] plot[smooth cycle, tension=0.55] coordinates {(2.392,2.772) (2.373,2.854) (2.317,2.928) (2.23,2.987) (2.121,3.024) (2,3.037) (1.879,3.024) (1.77,2.987) (1.683,2.928) (1.627,2.854) (1.608,2.772) (1.627,2.691) (1.683,2.617) (1.77,2.558) (1.879,2.521) (2,2.508) (2.121,2.521) (2.23,2.558) (2.317,2.617) (2.373,2.691)};
+\filldraw[draw=ink, line width=1.6pt, line join=round, fill=hairdark] plot[smooth cycle, tension=0.5] coordinates {(1.865,2.981) (2.135,2.981) (2.024,2.858) (1.976,2.858)};
+\draw[ink, line width=0.539pt, line cap=round, line join=round] (2,2.866) -- (2,2.596);
+\draw[ink, line width=0.784pt, line cap=round, line join=round] plot[smooth, tension=0.6] coordinates {(1.424,2.834) (1.482,2.787) (1.539,2.746) (1.597,2.709) (1.655,2.677) (1.712,2.65) (1.77,2.628) (1.827,2.611) (1.885,2.599) (1.942,2.591) (2,2.589) (2.058,2.591) (2.115,2.599) (2.173,2.611) (2.23,2.628) (2.288,2.65) (2.345,2.677) (2.403,2.709) (2.461,2.746) (2.518,2.787) (2.576,2.834)};
+\draw[ink, line width=0.49pt, line cap=round, line join=round] (1.449,2.744) -- (1.515,2.83);
+\draw[ink, line width=0.49pt, line cap=round, line join=round] (1.569,2.662) -- (1.625,2.755);
+\draw[ink, line width=0.49pt, line cap=round, line join=round] (1.691,2.6) -- (1.733,2.7);
+\draw[ink, line width=0.49pt, line cap=round, line join=round] (1.814,2.559) -- (1.841,2.663);
+\draw[ink, line width=0.49pt, line cap=round, line join=round] (1.938,2.537) -- (1.947,2.645);
+\draw[ink, line width=0.49pt, line cap=round, line join=round] (2.062,2.537) -- (2.053,2.645);
+\draw[ink, line width=0.49pt, line cap=round, line join=round] (2.186,2.559) -- (2.159,2.663);
+\draw[ink, line width=0.49pt, line cap=round, line join=round] (2.309,2.6) -- (2.267,2.7);
+\draw[ink, line width=0.49pt, line cap=round, line join=round] (2.431,2.662) -- (2.375,2.755);
+\draw[ink, line width=0.49pt, line cap=round, line join=round] (2.551,2.744) -- (2.485,2.83);
+\filldraw[draw=ink, line width=1.6pt, line join=round, fill=patch] (1.694,3.201) circle (0.171);
+\filldraw[draw=ink, line width=1.12pt, line join=round, fill=patch] (1.694,3.201) circle (0.127);
+\fill[hairdark] (1.65,3.245) circle (0.022);
+\fill[hairdark] (1.738,3.245) circle (0.022);
+\fill[hairdark] (1.738,3.157) circle (0.022);
+\fill[hairdark] (1.65,3.157) circle (0.022);
+\draw[bow, line width=0.392pt, line cap=round, line join=round] (1.65,3.245) -- (1.738,3.157);
+\draw[bow, line width=0.392pt, line cap=round, line join=round] (1.738,3.245) -- (1.65,3.157);
+\draw[white, line width=0.392pt, line cap=round, line join=round, opacity=0.8] (1.608,3.287) -- (1.657,3.324);
+\filldraw[draw=ink, line width=1.6pt, line join=round, fill=bow] (2.294,3.25) circle (0.103);
+\filldraw[draw=ink, line width=0.96pt, line join=round, fill=bow] (2.294,3.25) circle (0.073);
+\fill[hairdark] (2.267,3.25) circle (0.017);
+\fill[hairdark] (2.321,3.25) circle (0.017);
+\draw[eyewhite, line width=0.343pt, line cap=round, line join=round] (2.267,3.25) -- (2.321,3.25);
+\draw[eyewhite, line width=0.245pt, line cap=round, line join=round] plot[smooth, tension=0.6] coordinates {(2.321,3.25) (2.355,3.189) (2.331,3.091) (2.367,3.018)};
+\filldraw[draw=ink, line width=1.6pt, line join=round, fill=bow] plot[smooth cycle, tension=0.5] coordinates {(1.963,2.417) (1.706,2.576) (1.547,2.54) (1.559,2.258) (1.73,2.27)};
+\filldraw[draw=ink, line width=1.6pt, line join=round, fill=bow] plot[smooth cycle, tension=0.5] coordinates {(2.037,2.417) (2.294,2.576) (2.453,2.54) (2.441,2.258) (2.269,2.27)};
+\filldraw[draw=ink, line width=1.6pt, line join=round, fill=bow] (1.939,2.368) -- (1.767,2.05) -- (1.853,2.087) -- (1.89,2.025) -- (2.012,2.344) -- cycle;
+\filldraw[draw=ink, line width=1.6pt, line join=round, fill=bow] (2.061,2.368) -- (2.233,2.05) -- (2.147,2.087) -- (2.11,2.025) -- (1.988,2.344) -- cycle;
+\filldraw[draw=ink, line width=1.6pt, line join=round, fill=bow] (2,2.417) circle (0.093);
+\draw[ink, line width=0.245pt, line cap=round, line join=round] (1.877,2.429) -- (1.682,2.466);
+\draw[ink, line width=0.245pt, line cap=round, line join=round] (1.877,2.393) -- (1.682,2.332);
+\draw[ink, line width=0.245pt, line cap=round, line join=round] (2.123,2.429) -- (2.319,2.466);
+\draw[ink, line width=0.245pt, line cap=round, line join=round] (2.123,2.393) -- (2.319,2.332);
+\end{tikzpicture}
+\end{document}

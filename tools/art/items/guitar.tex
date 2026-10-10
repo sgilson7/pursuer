@@ -1,0 +1,116 @@
+\documentclass[tikz,border=0pt]{standalone}
+\usepackage{xcolor}
+% Palette: Sam_Comm_final.png by eye, and the cast's own colours.
+\definecolor{ink}{HTML}{3B2340}
+\definecolor{sky}{HTML}{EFC46A}
+\definecolor{skyhi}{HTML}{F5DA92}
+\definecolor{skylow}{HTML}{E9B060}
+\definecolor{cloud}{HTML}{F2D58A}
+\definecolor{wallA}{HTML}{E88A73}
+\definecolor{wallB}{HTML}{EE9F7E}
+\definecolor{wallC}{HTML}{E47A7E}
+\definecolor{wallD}{HTML}{F0B07E}
+\definecolor{wallE}{HTML}{D9765F}
+\definecolor{wallF}{HTML}{E99A8A}
+\definecolor{greenA}{HTML}{8DBB7E}
+\definecolor{greenB}{HTML}{6FA77A}
+\definecolor{greenC}{HTML}{A9C97F}
+\definecolor{greenD}{HTML}{5E9C6A}
+\definecolor{window}{HTML}{F6E7A0}
+\definecolor{windark}{HTML}{8C5A64}
+\definecolor{metal}{HTML}{8D9A93}
+\definecolor{metaldark}{HTML}{5E6B66}
+\definecolor{wood}{HTML}{B9835A}
+\definecolor{paving}{HTML}{E2BD8C}
+\definecolor{ground}{HTML}{D3A77D}
+\definecolor{stone}{HTML}{E7C9A0}
+\definecolor{road}{HTML}{C9957A}
+\definecolor{roadline}{HTML}{F3DFA8}
+\definecolor{paper}{HTML}{F6E7C4}
+\definecolor{paperdark}{HTML}{E3CC98}
+\definecolor{cardboard}{HTML}{C9A06A}
+\definecolor{cardboarddark}{HTML}{A47C4C}
+\definecolor{cutedge}{HTML}{A8998A}
+\definecolor{magenta}{HTML}{FF2E88}
+\definecolor{cyan}{HTML}{13CFE3}
+\definecolor{gold}{HTML}{FFB000}
+\definecolor{trim}{HTML}{F26B38}
+\definecolor{violet}{HTML}{7B2FF7}
+\definecolor{skin}{HTML}{E8B07C}
+\definecolor{skinB}{HTML}{C98B5E}
+\definecolor{skinC}{HTML}{F2C9A0}
+\definecolor{skinshade}{HTML}{D4956A}
+\definecolor{eyewhite}{HTML}{FBF4E4}
+\definecolor{mouth}{HTML}{5A2238}
+\definecolor{teeth}{HTML}{FBF4E4}
+\definecolor{blush}{HTML}{F08A8A}
+\definecolor{hairdark}{HTML}{2A1E33}
+\definecolor{leather}{HTML}{33293D}
+\definecolor{leatherhi}{HTML}{54466A}
+\definecolor{denim}{HTML}{46597A}
+\definecolor{guitar}{HTML}{D2463C}
+\definecolor{goldbelt}{HTML}{F2B53A}
+\definecolor{golddark}{HTML}{C98A1E}
+\definecolor{red}{HTML}{B3262E}
+\definecolor{royal}{HTML}{5E3A87}
+\definecolor{fur}{HTML}{C98A55}
+\definecolor{furlight}{HTML}{EBC592}
+\definecolor{bow}{HTML}{E2577A}
+\definecolor{patch}{HTML}{6FA77A}
+\definecolor{chef}{HTML}{F6EBD2}
+\definecolor{chefdark}{HTML}{D9C7A0}
+\definecolor{shirt}{HTML}{5FA8A0}
+\definecolor{check}{HTML}{9AA3A0}
+\definecolor{toast}{HTML}{E9B55E}
+\definecolor{crust}{HTML}{A8693C}
+\definecolor{butter}{HTML}{F7DE6A}
+\definecolor{tux}{HTML}{2E2638}
+\definecolor{tuxhi}{HTML}{4F4460}
+\definecolor{shirtwhite}{HTML}{F8F0DE}
+\definecolor{chrome}{HTML}{C9D3CF}
+\definecolor{chromedark}{HTML}{7F8C88}
+\definecolor{velvet}{HTML}{A8324A}
+\definecolor{ermine}{HTML}{F7F0DF}
+\definecolor{gown}{HTML}{5E9C6A}
+\definecolor{hairq}{HTML}{CFC6D8}
+\definecolor{jewelB}{HTML}{13A6C9}
+\definecolor{car}{HTML}{4FA3A5}
+\definecolor{cardark}{HTML}{2F7476}
+\definecolor{tyre}{HTML}{3E3A46}
+\definecolor{glass}{HTML}{A9D4CB}
+\definecolor{lamp}{HTML}{FFE6A3}
+\definecolor{smoke}{HTML}{E8D3AE}
+\definecolor{shingle}{HTML}{C9604F}
+\begin{document}
+\begin{tikzpicture}
+\clip (0,0) rectangle (4,4);
+\filldraw[draw=ink, line width=1.6pt, line join=round, fill=guitar] plot[smooth cycle, tension=0.55] coordinates {(0.741,0.604) (1.215,0.346) (1.613,0.526) (1.823,0.909) (2.106,1.26) (2.042,1.451) (1.713,1.31) (1.36,1.628) (1.383,1.877) (1.203,1.938) (0.896,1.71) (0.554,1.479) (0.416,1.065)};
+\filldraw[draw=ink, line width=1.6pt, line join=round, fill=eyewhite] plot[smooth cycle, tension=0.5] coordinates {(1.418,1.542) (1.631,1.33) (1.526,0.84) (1.147,0.643) (0.821,1.104) (0.957,1.554)};
+\filldraw[draw=ink, line width=1.12pt, line join=round, fill=hairdark] (1.181,1.332) -- (1.419,1.118) -- (1.493,1.199) -- (1.255,1.413) -- cycle;
+\filldraw[draw=ink, line width=1.12pt, line join=round, fill=hairdark] (1.014,1.146) -- (1.252,0.932) -- (1.325,1.013) -- (1.088,1.228) -- cycle;
+\filldraw[draw=ink, line width=1.12pt, line join=round, fill=chrome] (0.792,0.929) -- (1.059,0.688) -- (1.119,0.755) -- (0.852,0.996) -- cycle;
+\filldraw[draw=ink, line width=1.12pt, line join=round, fill=chrome] (1.287,0.672) circle (0.065);
+\filldraw[draw=ink, line width=1.12pt, line join=round, fill=chrome] (1.507,0.722) circle (0.065);
+\filldraw[draw=ink, line width=1.6pt, line join=round, fill=wood] (1.42,1.507) -- (1.569,1.373) -- (2.912,2.888) -- (2.786,3.002) -- cycle;
+\draw[chromedark, line width=0.3pt, line cap=round, line join=round] (1.611,1.705) -- (1.745,1.584);
+\draw[chromedark, line width=0.3pt, line cap=round, line join=round] (1.745,1.853) -- (1.879,1.733);
+\draw[chromedark, line width=0.3pt, line cap=round, line join=round] (1.879,2.002) -- (2.013,1.882);
+\draw[chromedark, line width=0.3pt, line cap=round, line join=round] (2.013,2.151) -- (2.147,2.03);
+\draw[chromedark, line width=0.3pt, line cap=round, line join=round] (2.147,2.299) -- (2.28,2.179);
+\draw[chromedark, line width=0.3pt, line cap=round, line join=round] (2.28,2.448) -- (2.414,2.327);
+\draw[chromedark, line width=0.3pt, line cap=round, line join=round] (2.414,2.596) -- (2.548,2.476);
+\draw[chromedark, line width=0.3pt, line cap=round, line join=round] (2.548,2.745) -- (2.682,2.625);
+\draw[chromedark, line width=0.3pt, line cap=round, line join=round] (2.682,2.894) -- (2.816,2.773);
+\filldraw[draw=ink, line width=1.6pt, line join=round, fill=guitar] (2.74,3.01) -- (2.925,2.843) -- (3.357,3.195) -- (3.303,3.411) -- (2.981,3.331) -- cycle;
+\filldraw[draw=ink, line width=0.96pt, line join=round, fill=chrome] (2.775,3.146) circle (0.045);
+\filldraw[draw=ink, line width=0.96pt, line join=round, fill=chrome] (3.074,2.911) circle (0.045);
+\filldraw[draw=ink, line width=0.96pt, line join=round, fill=chrome] (2.882,3.265) circle (0.045);
+\filldraw[draw=ink, line width=0.96pt, line join=round, fill=chrome] (3.192,3.02) circle (0.045);
+\filldraw[draw=ink, line width=0.96pt, line join=round, fill=chrome] (2.989,3.384) circle (0.045);
+\filldraw[draw=ink, line width=0.96pt, line join=round, fill=chrome] (3.31,3.128) circle (0.045);
+\draw[eyewhite, line width=0.225pt, line cap=round, line join=round] (0.914,0.886) -- (2.795,2.974);
+\draw[eyewhite, line width=0.225pt, line cap=round, line join=round] (0.944,0.859) -- (2.824,2.947);
+\draw[eyewhite, line width=0.225pt, line cap=round, line join=round] (0.974,0.832) -- (2.854,2.92);
+\draw[eyewhite, line width=0.225pt, line cap=round, line join=round] (1.003,0.805) -- (2.884,2.894);
+\end{tikzpicture}
+\end{document}

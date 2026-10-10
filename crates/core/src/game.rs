@@ -1,0 +1,1554 @@
+//! The game: its modes, the fixed 60 Hz step, the cameras, and everything
+//! the page reads back each frame.
+//!
+//! Modes: the title; the house, walking and picking things up; the chase,
+//! on foot and then in the car; caught. Holding a thing for `hold_seconds`
+//! folds the house and raises that thing's pursuer. The score is the time
+//! from the pursuer standing up to it catching you.
+
+use crate::car::{self, Car, Controls};
+use crate::city::{self, Blueprint, KIND_GRASS, KIND_ROAD, KIND_WALK};
+use crate::content::{Palette, Rgb};
+use crate::fx::{self, deg, int, ONE};
+use crate::geom::{facing, v3, Affine, V3};
+use crate::house::{self, House, Item, Shape};
+use crate::mesh::{self, Mesh};
+use crate::monster::{Monster, Tuning};
+use crate::quat::from_local;
+use crate::render::{
+    self, Batch, Camera, View, BUF_DYNAMIC, BUF_PIECES, BUF_SCENERY, DRAW_VALUES, INSTANCE_VALUES, LAYERS,
+    LAYER_CAR, LAYER_COCKPIT, LAYER_WORLD, MAT_VALUES, PASS_INK, PASS_SOLID, PASS_SPRITE, RECT_VALUES,
+};
+use crate::rng::Rng;
+use crate::rubble::{self, Rubble};
+use crate::terrain::{self, Terrain};
+use crate::walker::{Legs, Walker};
+use serde::Deserialize;
+use serde_json::json;
+
+pub const FORWARD: u32 = 1;
+pub const BACK: u32 = 2;
+pub const LEFT: u32 = 4;
+pub const RIGHT: u32 = 8;
+pub const JUMP: u32 = 16;
+pub const FLY: u32 = 32;
+pub const FLIP: u32 = 64;
+pub const USE: u32 = 128;
+pub const SHIFT: u32 = 256;
+/// set by the page while the game has the pointer
+pub const FOCUS: u32 = 512;
+
+const TICK_US: i64 = 1_000_000 / 60;
+const MAX_TICKS_PER_FRAME: i32 = 4;
+const DT: i32 = ONE / 60;
+/// How near an item must be to pick it up, and the car to get in.
+const REACH: i32 = ONE * 26 / 10;
+const CAR_REACH: i32 = ONE * 5;
+/// How far a software renderer draws.
+const LOW_FAR: i32 = 320 * ONE;
+/// Mouse sensitivity: angle units per CSS pixel (scaled by 100 at the shim).
+const LOOK: i32 = 14;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Mode {
+    Title,
+    House,
+    Chase,
+    Caught,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Upgrade {
+    pub id: String,
+    pub at: i32,
+    pub name: String,
+    pub text: String,
+}
+
+#[derive(Deserialize)]
+struct UpgradesFile {
+    upgrades: Vec<UpgradeJson>,
+}
+
+#[derive(Deserialize)]
+struct UpgradeJson {
+    id: String,
+    at: i32,
+    name: String,
+    text: String,
+}
+
+pub fn parse_upgrades(json: &str) -> Result<Vec<Upgrade>, String> {
+    let f: UpgradesFile = serde_json::from_str(json).map_err(|e| format!("upgrades.json: {e}"))?;
+    let known = ["flip", "big_wheels", "hover", "turbo", "wings"];
+    f.upgrades
+        .into_iter()
+        .map(|u| {
+            if !known.contains(&u.id.as_str()) {
+                return Err(format!("upgrades.json: no rule called {}", u.id));
+            }
+            Ok(Upgrade {
+                id: u.id,
+                at: u.at,
+                name: u.name,
+                text: u.text,
+            })
+        })
+        .collect()
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Dust {
+    pos: V3,
+    vel: V3,
+    size: i32,
+    life: i32,
+}
+
+/// The scenery: values, and the solid and outlined runs as (mesh, offset, count).
+#[derive(Debug, Clone, Default)]
+struct Scenery {
+    values: Vec<i32>,
+    solid: Vec<(u32, u32, u32)>,
+    ink: Vec<(u32, u32, u32)>,
+}
+
+pub struct Game {
+    mode: Mode,
+    paused: bool,
+    pal: Palette,
+    items: Vec<Item>,
+    hold_ticks: i32,
+    upgrades: Vec<Upgrade>,
+    tuning: Tuning,
+    terrain: Terrain,
+    blueprint: Blueprint,
+    pristine: Rubble,
+    city: Rubble,
+    house: House,
+    walker: Walker,
+    car: Car,
+    driving: bool,
+    monster: Option<Monster>,
+    /// ticks since the house began to fold; negative before
+    fold: i32,
+    aim: Option<usize>,
+    held: Option<usize>,
+    hold: i32,
+    chosen: Option<usize>,
+    /// ticks of the chase so far: the score
+    ticks: u32,
+    best: u32,
+    new_best: bool,
+    unlocked: usize,
+    toast: Option<(usize, i32)>,
+    dust: Vec<Dust>,
+    rng: Rng,
+    look_yaw: i32,
+    look_pitch: i32,
+    look_idle: i32,
+    shake: i32,
+    clock: Option<i64>,
+    acc: i64,
+    width: i32,
+    height: i32,
+    sounds: Vec<&'static str>,
+    pieces_version: u32,
+    scenery: Scenery,
+    // the frame's output
+    dynamic: Vec<i32>,
+    draws: Vec<u32>,
+    rects: Vec<i32>,
+    mats: Vec<i32>,
+    views: Vec<View>,
+    dirty: Vec<u32>,
+    held_bits: u32,
+    title_angle: i32,
+    /// drawing on a software renderer: no outlines, a shorter view, one mirror
+    low: bool,
+}
+
+fn bit(bits: u32, b: u32) -> bool {
+    bits & b != 0
+}
+
+/// Seconds and tenths, as the HUD shows a time: `m:ss.t`.
+pub fn clock_text(ticks: u32) -> String {
+    let tenths = ticks / 6;
+    format!("{}:{:02}.{}", tenths / 600, (tenths / 10) % 60, tenths % 10)
+}
+
+/// A Q16 percentage as CSS wants it, two decimals.
+fn pct(v: i32) -> String {
+    let hundredths = (v as i64 * 100) >> 16;
+    format!("{}.{:02}%", hundredths / 100, (hundredths % 100).abs())
+}
+
+/// A Q16 fraction as a decimal string, three places.
+fn frac(v: i32) -> String {
+    let thousandths = ((v.clamp(0, ONE) as i64) * 1000) >> 16;
+    format!("{}.{:03}", thousandths / 1000, thousandths % 1000)
+}
+
+impl Game {
+    pub fn new(
+        palette: &str,
+        items: &str,
+        upgrades: &str,
+        pursuer: &str,
+        saved: &str,
+    ) -> Result<Game, String> {
+        let pal = Palette::parse(palette)?;
+        let (items, hold_seconds) = house::parse_items(items)?;
+        let upgrades = parse_upgrades(upgrades)?;
+        let tuning = Tuning::parse(pursuer)?;
+        let terrain = Terrain::new();
+        let blueprint = city::plan(&terrain, &pal);
+        let pristine = Rubble::new(&blueprint);
+        let house = House::new(&pal);
+        let record: Option<serde_json::Value> = serde_json::from_str(saved).ok();
+        let best = record
+            .and_then(|r| r.get("best").and_then(|b| b.as_u64()))
+            .unwrap_or(0) as u32;
+        let mut g = Game {
+            mode: Mode::Title,
+            paused: false,
+            pal,
+            items,
+            hold_ticks: hold_seconds * 60,
+            upgrades,
+            tuning,
+            city: pristine.clone(),
+            pristine,
+            terrain,
+            blueprint,
+            house,
+            walker: Walker::new(V3::ZERO, 0, 0),
+            car: Car::new(house::CAR_AT, house::CAR_YAW),
+            driving: false,
+            monster: None,
+            fold: -1,
+            aim: None,
+            held: None,
+            hold: 0,
+            chosen: None,
+            ticks: 0,
+            best,
+            new_best: false,
+            unlocked: 0,
+            toast: None,
+            dust: Vec::new(),
+            rng: Rng::new(5),
+            look_yaw: 0,
+            look_pitch: 0,
+            look_idle: 0,
+            shake: 0,
+            clock: None,
+            acc: 0,
+            width: 1280,
+            height: 720,
+            sounds: Vec::new(),
+            pieces_version: 0,
+            scenery: Scenery::default(),
+            dynamic: Vec::new(),
+            draws: Vec::new(),
+            rects: Vec::new(),
+            mats: Vec::new(),
+            views: Vec::new(),
+            dirty: Vec::new(),
+            held_bits: 0,
+            title_angle: 0,
+            low: false,
+        };
+        g.scenery = g.build_scenery();
+        g.reset();
+        g.frame();
+        Ok(g)
+    }
+
+    /// Everything back as it was before a chase: the city whole, the house
+    /// standing, you inside facing the first thing on the list.
+    fn reset(&mut self) {
+        self.city = self.pristine.clone();
+        self.city.full_upload = true;
+        self.pieces_version += 1;
+        self.car = Car::new(house::CAR_AT, house::CAR_YAW);
+        let start = v3(-ONE * 28 / 10, house::FLOOR, ONE * 33 / 10);
+        let item = self.items.first().map(|i| i.centre).unwrap_or(V3::ZERO);
+        let eye = start.add(V3::UP.scale(crate::walker::EYE));
+        let (yaw, pitch) = crate::geom::yaw_pitch_of(item.sub(eye));
+        self.walker = Walker::new(start, yaw, pitch);
+        self.driving = false;
+        self.monster = None;
+        self.fold = -1;
+        self.aim = None;
+        self.held = None;
+        self.hold = 0;
+        self.chosen = None;
+        self.ticks = 0;
+        self.new_best = false;
+        self.unlocked = 0;
+        self.toast = None;
+        self.dust.clear();
+        self.look_yaw = 0;
+        self.look_pitch = 0;
+        // let the car settle on its wheels
+        for _ in 0..90 {
+            self.car
+                .step(Controls::default(), &self.terrain, &mut self.city, DT);
+        }
+    }
+
+    // ---- what the page calls ----
+
+    pub fn resize(&mut self, css_w: i32, css_h: i32, dpr_pct: i32) -> [i32; 2] {
+        self.width = (css_w * dpr_pct / 100).clamp(64, 4096);
+        self.height = (css_h * dpr_pct / 100).clamp(64, 4096);
+        self.frame();
+        [self.width, self.height]
+    }
+
+    /// The page's renderer draws in software: draw less.
+    pub fn set_low_detail(&mut self, low: bool) {
+        self.low = low;
+        self.frame();
+    }
+
+    pub fn begin(&mut self) {
+        if self.mode == Mode::Title || self.mode == Mode::Caught {
+            if self.mode == Mode::Caught {
+                self.reset();
+            }
+            self.mode = Mode::House;
+            self.paused = false;
+        }
+    }
+
+    pub fn again(&mut self) {
+        self.reset();
+        self.mode = Mode::House;
+        self.paused = false;
+    }
+
+    pub fn pause(&mut self) {
+        if self.mode == Mode::House || self.mode == Mode::Chase {
+            self.paused = true;
+        }
+    }
+
+    pub fn resume(&mut self) {
+        self.paused = false;
+        self.clock = None;
+    }
+
+    pub fn to_title(&mut self) {
+        self.reset();
+        self.mode = Mode::Title;
+        self.paused = false;
+    }
+
+    /// Knocks every piece of the city loose at once: the worst case the
+    /// rubble's budget is built for, reachable from the page as `#everything`.
+    pub fn wreck_all(&mut self) {
+        for i in 0..self.city.len() {
+            let k = (i as i32 % 7) - 3;
+            self.city.loose(i, v3(k * ONE, int(2), -k * ONE), V3::ZERO);
+        }
+    }
+
+    pub fn saved(&self) -> String {
+        json!({ "best": self.best }).to_string()
+    }
+
+    /// The page's clock (microseconds), the held action bits, and the mouse
+    /// movement (CSS pixels × 100).
+    pub fn advance(&mut self, now_us: i64, bits: u32, dx: i32, dy: i32) {
+        self.sounds.clear();
+        let elapsed = match self.clock {
+            Some(c) => (now_us - c).clamp(0, TICK_US * MAX_TICKS_PER_FRAME as i64),
+            None => TICK_US,
+        };
+        self.clock = Some(now_us);
+        let live = !self.paused && matches!(self.mode, Mode::House | Mode::Chase) && bit(bits, FOCUS);
+        if live {
+            self.mouse(dx, dy);
+        }
+        if self.mode == Mode::Title {
+            self.title_angle = (self.title_angle + 4) & (fx::TURN - 1);
+        }
+        self.acc += elapsed;
+        let mut n = 0;
+        while self.acc >= TICK_US && n < MAX_TICKS_PER_FRAME {
+            self.acc -= TICK_US;
+            n += 1;
+            if live {
+                self.tick(bits);
+            } else if !self.paused {
+                // the rubble settles behind the title and the verdict
+                let focus = self.player_pos();
+                self.city.step(&self.terrain, DT, focus);
+            }
+        }
+        if n == MAX_TICKS_PER_FRAME {
+            self.acc = 0;
+        }
+        // the held keys are remembered by the ticks alone: a display frame
+        // that runs no tick must not swallow a key's press
+        if !live {
+            self.held_bits = 0;
+        }
+        self.frame();
+    }
+
+    fn mouse(&mut self, dx: i32, dy: i32) {
+        let (yaw, pitch) = (-dx * LOOK / 100, -dy * LOOK / 100);
+        if self.driving {
+            self.look_yaw = (self.look_yaw + yaw).clamp(-deg(150), deg(150));
+            self.look_pitch = (self.look_pitch + pitch).clamp(-deg(60), deg(60));
+            if dx != 0 || dy != 0 {
+                self.look_idle = 0;
+            }
+        } else {
+            self.walker.yaw = (self.walker.yaw + yaw) & (fx::TURN - 1);
+            self.walker.pitch = (self.walker.pitch + pitch).clamp(-deg(85), deg(85));
+        }
+    }
+
+    fn player_pos(&self) -> V3 {
+        if self.driving {
+            self.car.body.pos
+        } else {
+            self.walker.pos
+        }
+    }
+
+    fn legs(bits: u32) -> Legs {
+        let axis = |a: u32, b: u32| (bit(bits, a) as i32 - bit(bits, b) as i32) * ONE;
+        Legs {
+            forward: axis(FORWARD, BACK),
+            left: axis(LEFT, RIGHT),
+            run: bit(bits, SHIFT),
+            jump: bit(bits, JUMP),
+        }
+    }
+
+    fn tick(&mut self, bits: u32) {
+        let pressed = |b: u32| bit(bits, b) && !bit(self.held_bits, b);
+        let solids: Vec<house::Solid> = self.house.blocking(self.fold.max(0)).copied().collect();
+        if !self.driving {
+            let step = self.walker.step(
+                Self::legs(bits),
+                &solids,
+                Some(&self.car.body),
+                &mut self.city,
+                &self.terrain,
+                DT,
+            );
+            if step {
+                self.sounds.push(if self.walker.left_foot {
+                    "squeak_l"
+                } else {
+                    "squeak_r"
+                });
+            }
+            self.car
+                .step(Controls::default(), &self.terrain, &mut self.city, DT);
+        }
+        match self.mode {
+            Mode::House => {
+                self.tick_house(bits);
+                let focus = self.player_pos();
+                self.city.step(&self.terrain, DT, focus);
+            }
+            Mode::Chase => self.tick_chase(bits, pressed(USE)),
+            _ => {}
+        }
+        self.held_bits = bits;
+    }
+
+    /// What the walker is looking at: the nearest item whose middle is
+    /// within its radius of the line of sight, and within reach.
+    fn looked_at(&self) -> Option<usize> {
+        let eye = self.walker.eye();
+        let look = self.walker.look();
+        let mut best: Option<(usize, i32)> = None;
+        for (k, it) in self.items.iter().enumerate() {
+            let rel = it.centre.sub(eye);
+            let along = rel.dot(look);
+            if along <= 0 || along > REACH {
+                continue;
+            }
+            let off = rel.sub(look.scale(along)).len();
+            if off <= it.radius + ONE / 10 && best.map(|b| along < b.1).unwrap_or(true) {
+                best = Some((k, along));
+            }
+        }
+        best.map(|b| b.0)
+    }
+
+    fn tick_house(&mut self, bits: u32) {
+        self.aim = self.looked_at();
+        match (self.held, bit(bits, USE)) {
+            (None, true) if !bit(self.held_bits, USE) => {
+                if let Some(k) = self.aim {
+                    self.held = Some(k);
+                    self.hold = 0;
+                    self.sounds.push("pickup");
+                }
+            }
+            (Some(_), true) => {
+                self.hold += 1;
+                if self.hold >= self.hold_ticks {
+                    self.unfold();
+                }
+            }
+            (Some(_), false) => {
+                self.held = None;
+                self.hold = 0;
+                self.sounds.push("putdown");
+            }
+            _ => {}
+        }
+    }
+
+    /// The house folds and the pursuer stands up.
+    fn unfold(&mut self) {
+        self.chosen = self.held;
+        self.held = None;
+        self.hold = 0;
+        self.fold = 0;
+        self.mode = Mode::Chase;
+        let at = v3(-self.tuning.spawn_distance, 0, 0);
+        let mut m = Monster::new(at, 0, self.tuning);
+        m.pos.y = self.terrain.height(at.x, at.z);
+        self.monster = Some(m);
+    }
+
+    fn tick_chase(&mut self, bits: u32, use_pressed: bool) {
+        self.fold += 1;
+        self.ticks += 1;
+        if self.driving {
+            let axis = |a: u32, b: u32| (bit(bits, a) as i32 - bit(bits, b) as i32) * ONE;
+            let c = Controls {
+                throttle: axis(FORWARD, BACK),
+                steer: axis(LEFT, RIGHT),
+                handbrake: bit(bits, SHIFT),
+                hover: bit(bits, JUMP),
+                fly: bit(bits, FLY),
+                flip: bit(bits, FLIP),
+            };
+            self.car.step(c, &self.terrain, &mut self.city, DT);
+            self.look_idle += 1;
+            if self.look_idle > 90 {
+                self.look_yaw = fx::approach(self.look_yaw, 0, deg(3));
+                self.look_pitch = fx::approach(self.look_pitch, 0, deg(2));
+            }
+        } else if use_pressed && self.walker.pos.dist(self.car.body.pos) < CAR_REACH {
+            self.driving = true;
+            self.look_yaw = 0;
+            self.look_pitch = 0;
+            if !self.upgrades.is_empty() && self.upgrades[0].at == 0 {
+                self.toast = Some((0, 60 * 5));
+            }
+        }
+        let target = self.player_pos();
+        if let Some(m) = self.monster.as_mut() {
+            m.step(target, &self.terrain, &mut self.city, DT);
+        }
+        self.city.step(&self.terrain, DT, target);
+        for b in self.city.bursts.drain(..) {
+            for _ in 0..2 {
+                let r = &mut self.rng;
+                self.dust.push(Dust {
+                    pos: b.at,
+                    vel: v3(
+                        r.range(-int(4), int(4)),
+                        r.range(int(1), int(5)),
+                        r.range(-int(4), int(4)),
+                    ),
+                    size: b.size.clamp(ONE, int(5)) + r.range(0, int(2)),
+                    life: 90,
+                });
+            }
+        }
+        for d in &mut self.dust {
+            d.pos = d.pos.add(d.vel.scale(DT));
+            d.vel = d.vel.scale(ONE - ONE / 40);
+            d.life -= 1;
+        }
+        self.dust.retain(|d| d.life > 0);
+        if self.dust.len() > 160 {
+            let extra = self.dust.len() - 160;
+            self.dust.drain(..extra);
+        }
+        // abilities, by time survived
+        while self.unlocked < self.upgrades.len() && self.ticks as i32 >= self.upgrades[self.unlocked].at * 60
+        {
+            let u = &self.upgrades[self.unlocked];
+            match u.id.as_str() {
+                "big_wheels" => self.car.kit.big_wheels = true,
+                "hover" => self.car.kit.hover = true,
+                "wings" => self.car.kit.wings = true,
+                "turbo" => self.car.kit.turbo += 1,
+                _ => {}
+            }
+            // the first is the car's own: it is told when you get in
+            if u.at > 0 {
+                self.toast = Some((self.unlocked, 60 * 5));
+            }
+            self.unlocked += 1;
+        }
+        if let Some((k, t)) = self.toast {
+            self.toast = if t > 1 { Some((k, t - 1)) } else { None };
+        }
+        let caught = self.monster.as_ref().map(|m| m.caught(target)).unwrap_or(false);
+        if caught {
+            self.mode = Mode::Caught;
+            if self.ticks > self.best {
+                self.best = self.ticks;
+                self.new_best = true;
+            }
+        }
+        self.shake = self
+            .monster
+            .as_ref()
+            .map(|m| ONE - fx::div(m.distance(target).min(int(90)), int(90)))
+            .unwrap_or(0);
+    }
+
+    // ---- the frame ----
+
+    fn camera(&mut self) -> Camera {
+        match self.mode {
+            Mode::Title => {
+                let a = self.title_angle;
+                let eye = v3(
+                    fx::mul(fx::sin(a), int(420)),
+                    int(150),
+                    fx::mul(fx::cos(a), int(420)),
+                );
+                Camera {
+                    eye,
+                    fwd: v3(0, int(20), 0).sub(eye).norm(),
+                    up: V3::UP,
+                    fov: deg(60),
+                }
+            }
+            Mode::Caught => {
+                let eye = self.player_pos().add(V3::UP.scale(int(2)));
+                let at = self
+                    .monster
+                    .as_ref()
+                    .map(|m| m.pos.add(V3::UP.scale(m.tune.height * 2 / 3)))
+                    .unwrap_or(V3::ZERO);
+                Camera {
+                    eye,
+                    fwd: at.sub(eye).norm(),
+                    up: V3::UP,
+                    fov: deg(80),
+                }
+            }
+            _ if self.driving => {
+                let b = &self.car.body;
+                let eye = b.pos.add(from_local(
+                    &b.basis,
+                    v3(-ONE * 40 / 100, ONE * 58 / 100, ONE * 30 / 100),
+                ));
+                let fwd = from_local(&b.basis, facing(self.look_yaw, self.look_pitch - deg(4)));
+                let up = b.basis[1].add(V3::UP).norm();
+                let jolt = self.jitter(ONE / 30);
+                Camera {
+                    eye: eye.add(jolt),
+                    fwd,
+                    up,
+                    fov: deg(78),
+                }
+            }
+            _ => {
+                let dread = if self.held.is_some() {
+                    fx::div(self.hold, self.hold_ticks.max(1))
+                } else {
+                    0
+                };
+                let wobble = fx::mul(dread, fx::mul(dread, deg(2)));
+                let (wy, wp) = (self.rng.range(-wobble, wobble), self.rng.range(-wobble, wobble));
+                Camera {
+                    eye: self.walker.eye().add(self.jitter(ONE / 12)),
+                    fwd: facing(self.walker.yaw + wy, self.walker.pitch + wp),
+                    up: V3::UP,
+                    fov: deg(74),
+                }
+            }
+        }
+    }
+
+    fn jitter(&mut self, most: i32) -> V3 {
+        let s = fx::mul(self.shake, most);
+        if s <= 0 || self.paused {
+            return V3::ZERO;
+        }
+        v3(
+            self.rng.range(-s, s),
+            self.rng.range(-s, s),
+            self.rng.range(-s, s),
+        )
+    }
+
+    fn mirror_cam(&self, at: V3, back: V3, fov: i32) -> Camera {
+        let b = &self.car.body;
+        Camera {
+            eye: b.pos.add(from_local(&b.basis, at)),
+            fwd: from_local(&b.basis, back.norm()),
+            up: b.basis[1],
+            fov,
+        }
+    }
+
+    /// The views on screen: the windscreen, and the three mirrors in the car.
+    fn layout(&mut self) -> Vec<View> {
+        let (w, h) = (self.width, self.height);
+        let main_cam = self.camera();
+        let in_car = self.driving && self.mode == Mode::Chase;
+        let mut views = vec![View {
+            rect: [0, 0, w, h],
+            mirror: false,
+            cam: main_cam,
+            far: render::FAR,
+            ink: true,
+            layers: [true, !in_car, in_car || self.held.is_some()],
+        }];
+        if in_car {
+            let world_car = [true, true, false];
+            let rear = (w * 34 / 100, h * 12 / 100);
+            views.push(View {
+                rect: [(w - rear.0) / 2, h - h * 25 / 1000 - rear.1, rear.0, rear.1],
+                mirror: true,
+                cam: self.mirror_cam(
+                    v3(0, ONE * 88 / 100, ONE * 40 / 100),
+                    v3(0, -ONE / 18, ONE),
+                    deg(24),
+                ),
+                far: int(900),
+                ink: false,
+                layers: [true, false, false],
+            });
+            let side = (w * 17 / 100, h * 13 / 100);
+            let top = h - h * 58 / 100 - side.1;
+            views.push(View {
+                rect: [w * 2 / 100, top, side.0, side.1],
+                mirror: true,
+                cam: self.mirror_cam(
+                    v3(-ONE * 105 / 100, ONE * 55 / 100, -ONE * 7 / 10),
+                    v3(-ONE / 6, -ONE / 30, ONE),
+                    deg(30),
+                ),
+                far: int(700),
+                ink: false,
+                layers: world_car,
+            });
+            views.push(View {
+                rect: [w - w * 2 / 100 - side.0, top, side.0, side.1],
+                mirror: true,
+                cam: self.mirror_cam(
+                    v3(ONE * 105 / 100, ONE * 55 / 100, -ONE * 7 / 10),
+                    v3(ONE / 6, -ONE / 30, ONE),
+                    deg(30),
+                ),
+                far: int(700),
+                ink: false,
+                layers: world_car,
+            });
+        }
+        if self.low {
+            views.truncate(2);
+            for v in &mut views {
+                v.ink = false;
+                v.far = v.far.min(LOW_FAR);
+            }
+        }
+        views
+    }
+
+    fn car_shapes(&self, b: &mut Batch) {
+        let c = &self.car;
+        let body = &c.body;
+        let place = Affine {
+            c0: body.basis[0],
+            c1: body.basis[1],
+            c2: body.basis[2],
+            t: body.pos,
+        };
+        let paint = self.pal.get("car_body");
+        let trim = self.pal.get("car_trim");
+        let glass = self.pal.get("car_glass");
+        let part = |layer: usize, mesh: Mesh, at: V3, size: V3, rgb: Rgb, b: &mut Batch| {
+            b.push(layer, mesh, &place.then(&render::boxed(at, size)), rgb, 0);
+        };
+        let o = |x: i32, y: i32, z: i32| v3(x * ONE / 100, y * ONE / 100, z * ONE / 100);
+        // outside
+        part(LAYER_CAR, Mesh::Cube, o(0, -5, 0), o(190, 70, 440), paint, b);
+        part(LAYER_CAR, Mesh::Cube, o(0, 66, 25), o(170, 72, 230), glass, b);
+        part(LAYER_CAR, Mesh::Cube, o(0, 105, 25), o(176, 8, 210), paint, b);
+        part(LAYER_CAR, Mesh::Cube, o(0, -28, -224), o(196, 26, 14), trim, b);
+        part(LAYER_CAR, Mesh::Cube, o(0, -28, 224), o(196, 26, 14), trim, b);
+        part(
+            LAYER_CAR,
+            Mesh::Cube,
+            o(-60, 6, -221),
+            o(40, 14, 4),
+            self.pal.get("headlight"),
+            b,
+        );
+        part(
+            LAYER_CAR,
+            Mesh::Cube,
+            o(60, 6, -221),
+            o(40, 14, 4),
+            self.pal.get("headlight"),
+            b,
+        );
+        part(LAYER_CAR, Mesh::Cube, o(0, 12, 0), o(194, 8, 300), trim, b);
+        // wheels: a cylinder on its side, turned by the steering, spun by the road
+        let tune = c.kit.tune();
+        for (k, m) in car::MOUNTS.iter().enumerate() {
+            let centre = m.sub(v3(0, c.travel[k], 0));
+            let steer = if k < 2 { c.steer } else { 0 };
+            let d = tune.radius * 2;
+            let wheel = Affine::translate(centre)
+                .then(&Affine::rot_y(steer))
+                .then(&Affine::rot_x(-c.spin))
+                .then(&Affine::rot_z(fx::QUARTER));
+            b.push(
+                LAYER_CAR,
+                Mesh::Cyl,
+                &place.then(&wheel).then(&Affine::scale(v3(d, ONE * 32 / 100, d))),
+                self.pal.get("tire"),
+                0,
+            );
+            b.push(
+                LAYER_CAR,
+                Mesh::Cyl,
+                &place
+                    .then(&wheel)
+                    .then(&Affine::scale(v3(d / 2, ONE * 34 / 100, d / 2))),
+                self.pal.get("hub"),
+                0,
+            );
+        }
+        if !self.driving {
+            return;
+        }
+        // the cockpit, from the driver's seat
+        let dash = self.pal.get("dash");
+        part(
+            LAYER_COCKPIT,
+            Mesh::Cube,
+            o(0, 26, -160),
+            o(186, 14, 130),
+            paint,
+            b,
+        );
+        part(LAYER_COCKPIT, Mesh::Cube, o(0, 38, -78), o(172, 24, 38), dash, b);
+        part(LAYER_COCKPIT, Mesh::Cube, o(0, 104, -36), o(176, 8, 14), paint, b);
+        part(LAYER_COCKPIT, Mesh::Cube, o(-93, 44, 20), o(8, 10, 200), paint, b);
+        part(LAYER_COCKPIT, Mesh::Cube, o(93, 44, 20), o(8, 10, 200), paint, b);
+
+        for side in [-1, 1] {
+            let pillar = Affine::translate(o(side * 85, 74, -62))
+                .then(&Affine::rot_x(deg(40)))
+                .then(&Affine::scale(o(7, 72, 7)));
+            b.push(LAYER_COCKPIT, Mesh::Cube, &place.then(&pillar), paint, 0);
+            let housing = Affine::translate(o(side * 106, 55, -72)).then(&Affine::scale(o(10, 16, 26)));
+            b.push(LAYER_COCKPIT, Mesh::Cube, &place.then(&housing), dash, 0);
+        }
+        let wheel = Affine::translate(o(-40, 52, -50))
+            .then(&Affine::rot_x(deg(62)))
+            .then(&Affine::rot_y(-c.steer * 3))
+            .then(&Affine::scale(o(36, 4, 36)));
+        b.push(LAYER_COCKPIT, Mesh::Ring, &place.then(&wheel), dash, 0);
+        let column = Affine::translate(o(-40, 46, -62))
+            .then(&Affine::rot_x(deg(62)))
+            .then(&Affine::scale(o(5, 20, 5)));
+        b.push(LAYER_COCKPIT, Mesh::Cyl, &place.then(&column), dash, 0);
+    }
+
+    fn held_shapes(&self, cam: &Camera, b: &mut Batch) {
+        let Some(k) = self.held else { return };
+        let it = &self.items[k];
+        let right = cam.fwd.cross(cam.up).norm();
+        let up = right.cross(cam.fwd);
+        let tilt = fx::div(self.hold, self.hold_ticks.max(1));
+        let spin = fx::mul(tilt, deg(200)) + deg(160);
+        let size = it.radius * 2;
+        let scale = fx::div(ONE * 32 / 100, size.max(ONE / 4)).min(ONE);
+        let at = cam
+            .eye
+            .add(cam.fwd.scale(ONE * 70 / 100))
+            .add(right.scale(ONE * 18 / 100))
+            .sub(up.scale(ONE * 26 / 100))
+            .sub(it.centre.sub(it.at).scale(scale));
+        let place = Affine {
+            c0: right.scale(scale),
+            c1: up.scale(scale),
+            c2: cam.fwd.neg().scale(scale),
+            t: at,
+        }
+        .then(&Affine::rot_y(spin));
+        let mut shapes = Vec::new();
+        it.shapes(&place, &mut shapes);
+        for s in shapes {
+            b.push(LAYER_COCKPIT, s.mesh, &s.at, s.rgb, 0);
+        }
+    }
+
+    fn monster_shapes(&self, b: &mut Batch) {
+        let Some(m) = &self.monster else { return };
+        let fwd = m.fwd();
+        let right = fwd.neg().cross(V3::UP).norm();
+        let lean = fx::mul(ONE - m.rise(), fx::QUARTER);
+        let (s, c) = (fx::sin(lean), fx::cos(lean));
+        let up = V3::UP.scale(c).sub(fwd.scale(s));
+        let normal = fwd.scale(c).add(V3::UP.scale(s));
+        let (wd, ht) = (m.tune.width, m.tune.height);
+        let card = Affine {
+            c0: right.scale(wd),
+            c1: up.scale(ht),
+            c2: normal,
+            t: m.pos.add(up.scale(ht / 2)).add(V3::UP.scale(ONE / 2)),
+        };
+        b.sprite(&card, self.chosen.unwrap_or(0) as u32);
+        // the cardboard strut behind, once it stands
+        if m.rise() > ONE / 2 {
+            let strut = Affine::translate(m.pos.sub(fwd.scale(int(8))).add(V3::UP.scale(ht / 4)))
+                .then(&Affine {
+                    c0: right,
+                    c1: V3::UP,
+                    c2: fwd,
+                    t: V3::ZERO,
+                })
+                .then(&Affine::scale(v3(int(2), ht / 2, int(16))));
+            b.push(LAYER_WORLD, Mesh::Wedge, &strut, self.pal.get("cardboard"), 0);
+        }
+    }
+
+    fn build_dynamic(&mut self, main: &Camera) -> Batch {
+        let mut b = Batch::new();
+        let mut shapes: Vec<Shape> = Vec::new();
+        self.house.shapes(self.fold.max(0), &mut shapes);
+        for (k, it) in self.items.iter().enumerate() {
+            if Some(k) == self.held || (Some(k) == self.chosen && self.fold >= 0) {
+                continue;
+            }
+            it.shapes(&it.rest(), &mut shapes);
+        }
+        for s in shapes {
+            b.push(LAYER_WORLD, s.mesh, &s.at, s.rgb, 0);
+        }
+        // the item looked at glows a little
+        if let (Some(k), None, Mode::House) = (self.aim, self.held, self.mode) {
+            let it = &self.items[k];
+            let ring = render::boxed(
+                it.at.add(V3::UP.scale(ONE / 50)),
+                v3(it.radius * 3, ONE / 50, it.radius * 3),
+            );
+            b.push(
+                LAYER_WORLD,
+                Mesh::Ring,
+                &ring,
+                self.pal.get("window_lit"),
+                crate::city::STYLE_GLOW * ONE,
+            );
+        }
+        self.car_shapes(&mut b);
+        self.held_shapes(main, &mut b);
+        self.monster_shapes(&mut b);
+        let dust = self.pal.get("dust");
+        for d in &self.dust {
+            let s = fx::mul(d.size, fx::div(d.life, 90)) + ONE / 4;
+            b.push(
+                LAYER_WORLD,
+                Mesh::Blob,
+                &render::boxed(d.pos, v3(s, s, s)),
+                dust,
+                0,
+            );
+        }
+        b
+    }
+
+    fn frame(&mut self) {
+        let views = self.layout();
+        let batch = self.build_dynamic(&views[0].cam);
+        let (values, runs, sprite) = batch.finish();
+        self.dynamic = values;
+        self.rects.clear();
+        self.mats.clear();
+        self.draws.clear();
+        for (vi, v) in views.iter().enumerate() {
+            let vi = vi as u32;
+            self.rects
+                .extend_from_slice(&[v.rect[0], v.rect[1], v.rect[2], v.rect[3], v.mirror as i32]);
+            self.mats.extend_from_slice(&v.mat_values());
+            let pieces = render::piece_runs(&self.city.groups, v);
+            let mut push = |d: [u32; DRAW_VALUES]| self.draws.extend_from_slice(&d);
+            for &(off, n) in &pieces {
+                push([vi, BUF_PIECES, Mesh::Cube as u32, off, n, PASS_SOLID, 0]);
+            }
+            for &(mesh, off, n) in &self.scenery.solid {
+                if !(self.low && (mesh == render::MESH_OUTSKIRTS || mesh == Mesh::Blob as u32)) {
+                    push([vi, BUF_SCENERY, mesh, off, n, PASS_SOLID, 0]);
+                }
+            }
+            for &(layer, mesh, off, n) in &runs {
+                if v.layers[layer] {
+                    push([vi, BUF_DYNAMIC, mesh, off, n, PASS_SOLID, 0]);
+                }
+            }
+            if let Some((off, n, tex)) = sprite {
+                push([vi, BUF_DYNAMIC, Mesh::Card as u32, off, n, PASS_SPRITE, tex]);
+            }
+            if v.ink {
+                for &(off, n) in &pieces {
+                    push([vi, BUF_PIECES, Mesh::Cube as u32, off, n, PASS_INK, 0]);
+                }
+                for &(mesh, off, n) in &self.scenery.ink {
+                    push([vi, BUF_SCENERY, mesh, off, n, PASS_INK, 0]);
+                }
+                for &(layer, mesh, off, n) in &runs {
+                    if v.layers[layer] && layer != LAYER_COCKPIT {
+                        push([vi, BUF_DYNAMIC, mesh, off, n, PASS_INK, 0]);
+                    }
+                }
+            }
+        }
+        self.views = views;
+    }
+
+    fn build_scenery(&self) -> Scenery {
+        let mut lists: Vec<(u32, Vec<i32>, bool)> = Vec::new();
+        let ident = Affine::IDENTITY;
+        for (mesh, name) in [
+            (render::MESH_GRASS, "grass"),
+            (render::MESH_ROAD, "road"),
+            (render::MESH_WALK, "walk"),
+            (render::MESH_OUTSKIRTS, "outskirts"),
+        ] {
+            lists.push((
+                mesh,
+                render::instance(&ident, self.pal.get(name), 0).to_vec(),
+                false,
+            ));
+        }
+        // centre-line dashes, laid along the slope
+        let mut dashes = Vec::new();
+        let lane = self.pal.get("lane");
+        for mk in &self.blueprint.marks {
+            let (along, len) = if mk.along_x {
+                (v3(ONE, 0, 0), int(3))
+            } else {
+                (v3(0, 0, ONE), int(3))
+            };
+            let a = mk.pos.sub(along.scale(len / 2));
+            let b = mk.pos.add(along.scale(len / 2));
+            let (ha, hb) = (self.terrain.height(a.x, a.z), self.terrain.height(b.x, b.z));
+            let dir = v3(along.x * 3, fx::div(hb - ha, ONE), along.z * 3).norm();
+            let side = dir.cross(V3::UP).norm();
+            let up = side.cross(dir);
+            let at = Affine {
+                c0: side.scale(ONE * 25 / 100),
+                c1: up.scale(ONE / 10),
+                c2: dir.neg().scale(len),
+                t: mk.pos.add(V3::UP.scale(ONE / 25)),
+            };
+            dashes.extend_from_slice(&render::instance(&at, lane, 0));
+        }
+        lists.push((Mesh::Cube as u32, dashes, false));
+        // clouds, outlined as Sam_Comm_final's are
+        let mut clouds = Vec::new();
+        let mut r = Rng::new(31);
+        let cloud = self.pal.get("window_lit");
+        for k in 0..16 {
+            let a = fx::TURN * k / 16 + r.range(0, fx::TURN / 32);
+            let d = int(r.range(1100, 1500));
+            let c = v3(
+                fx::mul(fx::sin(a), d),
+                int(r.range(240, 420)),
+                fx::mul(fx::cos(a), d),
+            );
+            for _ in 0..4 {
+                let s = int(r.range(70, 140));
+                let off = v3(
+                    int(r.range(-110, 110)),
+                    int(r.range(-15, 25)),
+                    int(r.range(-60, 60)),
+                );
+                let at = render::boxed(c.add(off), v3(s * 2, s * 3 / 4, s));
+                clouds.extend_from_slice(&render::instance(&at, cloud, 0));
+            }
+        }
+        lists.push((Mesh::Blob as u32, clouds, true));
+        let mut s = Scenery::default();
+        for (mesh, v, inked) in lists {
+            if v.is_empty() {
+                continue;
+            }
+            let off = (s.values.len() * render::BYTES_PER_VALUE) as u32;
+            let n = (v.len() / INSTANCE_VALUES) as u32;
+            s.solid.push((mesh, off, n));
+            if inked {
+                s.ink.push((mesh, off, n));
+            }
+            s.values.extend_from_slice(&v);
+        }
+        s
+    }
+
+    // ---- read by the page ----
+
+    pub fn pieces_values(&self) -> &[i32] {
+        self.city.values()
+    }
+
+    pub fn pieces_version(&self) -> u32 {
+        self.pieces_version
+    }
+
+    /// The runs of piece slots to upload since the last call.
+    pub fn take_dirty(&mut self) -> Vec<u32> {
+        self.dirty = self.city.take_dirty();
+        self.dirty.clone()
+    }
+
+    pub fn scenery(&self) -> Vec<i32> {
+        self.scenery.values.clone()
+    }
+
+    pub fn dynamic(&self) -> Vec<i32> {
+        self.dynamic.clone()
+    }
+
+    pub fn draws(&self) -> Vec<u32> {
+        self.draws.clone()
+    }
+
+    pub fn rects(&self) -> Vec<i32> {
+        self.rects.clone()
+    }
+
+    pub fn mats(&self) -> Vec<i32> {
+        self.mats.clone()
+    }
+
+    pub fn mesh(&self, id: u32) -> Vec<i32> {
+        let kinds = &self.blueprint.kinds;
+        match id {
+            render::MESH_GRASS => self.terrain.cells_mesh(kinds, KIND_GRASS, 0),
+            render::MESH_ROAD => self.terrain.cells_mesh(kinds, KIND_ROAD, 0),
+            render::MESH_WALK => self.terrain.cells_mesh(kinds, KIND_WALK, ONE / 25),
+            render::MESH_OUTSKIRTS => self.terrain.outskirts_mesh(2400, 60),
+            _ => Mesh::ALL
+                .iter()
+                .find(|m| **m as u32 == id)
+                .map(|m| mesh::vertices(*m))
+                .unwrap_or_default(),
+        }
+    }
+
+    pub fn uniforms(&self) -> Vec<i32> {
+        let p = &self.pal;
+        let light = v3(ONE * 4 / 10, ONE * 8 / 10, ONE * 3 / 10).norm();
+        let mut u = vec![light.x, light.y, light.z];
+        for name in ["sky", "fog", "light", "window_dark", "window_lit", "ink"] {
+            u.extend_from_slice(&p.get(name));
+        }
+        // fog from and to, metres; the ink line's least width, growth a metre, most
+        u.extend_from_slice(&[int(260), int(1500), ONE * 3 / 100, ONE / 160, ONE * 22 / 100]);
+        u
+    }
+
+    pub fn clear_color(&self) -> Vec<i32> {
+        self.pal.get("sky").to_vec()
+    }
+
+    pub fn items_json(&self) -> String {
+        let list: Vec<serde_json::Value> = self
+            .items
+            .iter()
+            .map(|i| json!({ "id": i.id, "monster": i.monster, "name": i.name }))
+            .collect();
+        serde_json::Value::Array(list).to_string()
+    }
+
+    pub fn hud_json(&self) -> String {
+        let mode = match self.mode {
+            Mode::Title => "title",
+            Mode::House => "house",
+            Mode::Chase => "chase",
+            Mode::Caught => "caught",
+        };
+        let mode = if self.paused { "paused" } else { mode };
+        let target = self.player_pos();
+        let item = |k: Option<usize>| k.map(|k| self.items[k].name.clone());
+        let near_car =
+            !self.driving && self.mode == Mode::Chase && self.walker.pos.dist(self.car.body.pos) < CAR_REACH;
+        let prompt = match self.mode {
+            Mode::House if self.held.is_some() => "holding",
+            Mode::House if self.aim.is_some() => "pick",
+            Mode::Chase if near_car => "enter",
+            Mode::Chase if !self.driving => "run",
+            _ => "",
+        };
+        let dread = if self.held.is_some() {
+            fx::div(self.hold, self.hold_ticks.max(1))
+        } else {
+            0
+        };
+        let c = &self.car;
+        let ability = |id: &str, have: bool, left: i32, wait: i32, total: i32, recharge: i32| {
+            let (state, level) = if !have {
+                ("locked", 0)
+            } else if left > 0 {
+                ("active", fx::div(left, total))
+            } else if wait > 0 {
+                ("charging", ONE - fx::div(wait, total + recharge))
+            } else {
+                ("ready", ONE)
+            };
+            json!({ "id": id, "state": state, "level": pct(level * 100) })
+        };
+        let abilities = vec![
+            ability(
+                "hover",
+                c.kit.hover,
+                c.hover_left,
+                c.hover_wait,
+                car::HOVER_TICKS,
+                car::HOVER_RECHARGE,
+            ),
+            ability(
+                "wings",
+                c.kit.wings,
+                c.fly_left,
+                c.fly_wait,
+                car::FLY_TICKS,
+                car::FLY_RECHARGE,
+            ),
+            json!({ "id": "flip", "state": if c.flipping { "active" } else { "ready" }, "level": "100.00%" }),
+            json!({ "id": "big_wheels", "state": if c.kit.big_wheels { "ready" } else { "locked" }, "level": "100.00%" }),
+        ];
+        let mirrors: Vec<serde_json::Value> = self
+            .views
+            .iter()
+            .skip(1)
+            .map(|v| {
+                let (w, h) = (self.width.max(1), self.height.max(1));
+                let top = h - v.rect[1] - v.rect[3];
+                json!([
+                    pct(fx::div(v.rect[0], w) * 100),
+                    pct(fx::div(top, h) * 100),
+                    pct(fx::div(v.rect[2], w) * 100),
+                    pct(fx::div(v.rect[3], h) * 100)
+                ])
+            })
+            .collect();
+        let car_marker = if self.mode == Mode::Chase && !self.driving {
+            let aspect = fx::div(self.width.max(1), self.height.max(1));
+            self.views[0]
+                .cam
+                .screen(aspect, self.car.body.pos.add(V3::UP.scale(int(2))))
+                .map(|(x, y)| json!([pct(x.clamp(int(3), int(97))), pct(y.clamp(int(5), int(92)))]))
+        } else {
+            None
+        };
+        let toast = self.toast.map(|(k, _)| {
+            let u = &self.upgrades[k];
+            json!({ "name": u.name, "text": u.text })
+        });
+        let next = self.upgrades.get(self.unlocked).map(
+            |u| json!({ "name": u.name, "in": clock_text((u.at as u32 * 60).saturating_sub(self.ticks)) }),
+        );
+        let chosen = self.chosen.map(|k| &self.items[k]);
+        let monster_dist = self
+            .monster
+            .as_ref()
+            .map(|m| m.distance(target) / ONE)
+            .unwrap_or(0);
+        let speed_kmh = c.body.vel.len() as i64 * 36 / 10 / ONE as i64;
+        json!({
+            "mode": mode,
+            "driving": self.driving,
+            "prompt": prompt,
+            "aim": item(self.aim),
+            "held": item(self.held),
+            "dread": frac(dread),
+            "time": clock_text(self.ticks),
+            "best": clock_text(self.best),
+            "new_best": self.new_best,
+            "speed": speed_kmh.to_string(),
+            "distance": monster_dist.to_string(),
+            "danger": frac(self.shake),
+            "monster": chosen.map(|i| i.monster_name.clone()),
+            "monster_id": chosen.map(|i| i.monster.clone()),
+            "line": chosen.map(|i| i.line.clone()),
+            "abilities": abilities,
+            "mirrors": mirrors,
+            "car_marker": car_marker,
+            "toast": toast,
+            "next": next,
+            "sounds": self.sounds,
+            "music": self.mode == Mode::Chase && !self.paused,
+            "flying": c.flying(),
+            "hovering": c.hovering(),
+            "upside_down": c.up().y < ONE / 3 && self.driving,
+            "loosed": self.city.stats.loosed,
+            "awake": self.city.awake_count(),
+            "pieces": self.city.len(),
+        })
+        .to_string()
+    }
+
+    /// For tests and the probe: the parts of the state a check reads.
+    pub fn mode(&self) -> Mode {
+        self.mode
+    }
+
+    pub fn driving(&self) -> bool {
+        self.driving
+    }
+
+    pub fn city(&self) -> &Rubble {
+        &self.city
+    }
+
+    pub fn car(&self) -> &Car {
+        &self.car
+    }
+
+    pub fn monster(&self) -> Option<&Monster> {
+        self.monster.as_ref()
+    }
+
+    pub fn ticks(&self) -> u32 {
+        self.ticks
+    }
+
+    /// Puts the walker at a place facing a way (tests and the probe).
+    pub fn place_walker(&mut self, at: V3, yaw: i32, pitch: i32) {
+        self.walker = Walker::new(at, yaw, pitch);
+    }
+}
+
+/// The layout numbers the page needs, so it holds none of its own.
+pub fn numbers() -> String {
+    let i = |name: &str, size: usize, offset: usize| json!([name, size, offset * 4]);
+    json!({
+        "vertex": { "stride": mesh::VERTEX_VALUES * 4, "attributes": [i("aPos", 3, 0), i("aNormal", 3, 3)] },
+        "instance": {
+            "stride": INSTANCE_VALUES * 4,
+            "attributes": [i("iA", 4, 0), i("iB", 4, 4), i("iC", 4, 8), i("iD", 4, 12)]
+        },
+        "buffers": { "pieces": BUF_PIECES, "scenery": BUF_SCENERY, "dynamic": BUF_DYNAMIC },
+        "passes": { "solid": PASS_SOLID, "sprite": PASS_SPRITE, "ink": PASS_INK },
+        "draw_values": DRAW_VALUES,
+        "vertex_values": mesh::VERTEX_VALUES,
+        "rect_values": RECT_VALUES,
+        "mat_values": MAT_VALUES,
+        "view_values": 16,
+        "dirty_values": 3,
+        "mesh_count": render::MESH_COUNT,
+        "layers": LAYERS,
+        "uniforms": [["uLightDir", 3], ["uSky", 3], ["uFog", 3], ["uLight", 3], ["uWindowDark", 3], ["uWindowLit", 3], ["uInk", 3], ["uFogRange", 2], ["uInkSize", 3]],
+        "actions": {
+            "forward": FORWARD, "back": BACK, "left": LEFT, "right": RIGHT, "jump": JUMP, "fly": FLY,
+            "flip": FLIP, "use": USE, "shift": SHIFT, "focus": FOCUS
+        },
+        "terrain_cells": terrain::N,
+        "rubble_full": rubble::FULL,
+    })
+    .to_string()
+}
+
+#[cfg(test)]
+pub(crate) mod tests {
+    use super::*;
+
+    pub fn game() -> Game {
+        Game::new(
+            include_str!("../../../data/palette.json"),
+            include_str!("../../../data/items.json"),
+            include_str!("../../../data/upgrades.json"),
+            include_str!("../../../data/pursuer.json"),
+            "",
+        )
+        .unwrap()
+    }
+
+    fn run(g: &mut Game, bits: u32, frames: usize, t: &mut i64) {
+        for _ in 0..frames {
+            *t += TICK_US;
+            g.advance(*t, bits | FOCUS, 0, 0);
+        }
+    }
+
+    #[test]
+    fn the_game_opens_on_the_title_and_begins_in_the_house_looking_at_an_item() {
+        let mut g = game();
+        assert_eq!(g.mode(), Mode::Title);
+        g.begin();
+        assert_eq!(g.mode(), Mode::House);
+        let mut t = 0;
+        run(&mut g, 0, 5, &mut t);
+        assert_eq!(g.aim, Some(0), "the walker starts facing the teddy bear");
+        let hud: serde_json::Value = serde_json::from_str(&g.hud_json()).unwrap();
+        assert_eq!(hud["prompt"], "pick");
+    }
+
+    #[test]
+    fn letting_go_in_time_puts_it_back_and_holding_on_brings_the_pursuer() {
+        let mut g = game();
+        g.begin();
+        let mut t = 0;
+        run(&mut g, 0, 2, &mut t);
+        run(&mut g, USE, 60 * 2, &mut t);
+        assert!(g.held.is_some());
+        run(&mut g, 0, 2, &mut t);
+        assert!(g.held.is_none(), "let go");
+        assert_eq!(g.mode(), Mode::House);
+        run(&mut g, USE, 60 * 5 + 10, &mut t);
+        assert_eq!(g.mode(), Mode::Chase);
+        assert!(g.monster().is_some());
+        let hud: serde_json::Value = serde_json::from_str(&g.hud_json()).unwrap();
+        assert_eq!(hud["monster"], "Mr. Buttons");
+        assert_eq!(hud["music"], true);
+    }
+
+    #[test]
+    fn standing_still_gets_you_caught_and_the_time_is_the_score() {
+        let mut g = game();
+        g.begin();
+        let mut t = 0;
+        run(&mut g, USE, 60 * 5 + 5, &mut t);
+        run(&mut g, 0, 60 * 60, &mut t);
+        assert_eq!(g.mode(), Mode::Caught);
+        assert!(g.ticks() > 60 * 10, "{}", g.ticks());
+        assert!(g.saved().contains(&g.ticks().to_string()));
+        assert!(g.city().stats.loosed > 0, "it broke things on the way");
+    }
+
+    #[test]
+    fn the_car_can_be_entered_and_driven_out_of_the_garage() {
+        let mut g = game();
+        g.begin();
+        let mut t = 0;
+        run(&mut g, USE, 60 * 5 + 5, &mut t);
+        let near = house::CAR_AT.add(v3(0, 0, int(2)));
+        g.place_walker(v3(near.x, house::FLOOR, near.z), 0, 0);
+        run(&mut g, 0, 2, &mut t);
+        run(&mut g, USE, 2, &mut t);
+        assert!(g.driving());
+        run(&mut g, FORWARD, 60 * 3, &mut t);
+        assert!(
+            g.car().body.pos.x > int(30),
+            "out the garage door, east: {}",
+            g.car().body.pos.x / ONE
+        );
+        assert_eq!(g.views.len(), 4, "the windscreen and three mirrors");
+    }
+
+    #[test]
+    fn a_press_on_a_frame_with_no_tick_is_still_a_press() {
+        let mut g = game();
+        g.begin();
+        let mut t = 0;
+        run(&mut g, 0, 3, &mut t);
+        // a display frame too soon after the last for a tick to run
+        g.advance(t + TICK_US / 4, USE | FOCUS, 0, 0);
+        run(&mut g, USE, 2, &mut t);
+        assert!(g.held.is_some(), "the press reached the house");
+    }
+
+    #[test]
+    fn upgrades_arrive_with_time() {
+        let mut g = game();
+        g.begin();
+        let mut t = 0;
+        run(&mut g, USE, 60 * 5 + 5, &mut t);
+        g.driving = true;
+        // keep it out of reach: the car is moved each frame far from it
+        for _ in 0..(60 * 60) {
+            if let Some(m) = g.monster.as_mut() {
+                m.pos = v3(-int(400), 0, -int(400));
+            }
+            run(&mut g, 0, 1, &mut t);
+        }
+        assert!(g.car().kit.big_wheels && g.car().kit.hover);
+        assert!(!g.car().kit.wings);
+    }
+
+    #[test]
+    fn the_numbers_parse_and_clock_text_reads_minutes() {
+        let n: serde_json::Value = serde_json::from_str(&numbers()).unwrap();
+        assert_eq!(n["instance"]["stride"], 64);
+        assert_eq!(clock_text(60 * 83 + 30), "1:23.5");
+        assert_eq!(pct(ONE / 2), "0.50%");
+    }
+
+    #[test]
+    fn every_mesh_has_whole_triangles() {
+        let g = game();
+        for id in 0..render::MESH_COUNT {
+            let v = g.mesh(id);
+            assert!(!v.is_empty(), "mesh {id}");
+            assert_eq!(v.len() % (3 * mesh::VERTEX_VALUES), 0);
+        }
+    }
+}
+
+/// White noise for the page's sound, from the core's seeded generator, as
+/// Q16 samples in −1..1.
+pub fn noise(n: u32, seed: u32) -> Vec<i32> {
+    let mut r = Rng::new(seed as u64);
+    (0..n.min(1 << 20)).map(|_| r.range(-ONE, ONE)).collect()
+}
+
+#[cfg(test)]
+mod handedness {
+    use super::*;
+
+    /// Every dynamic and scenery instance, in every mode of a chase, has
+    /// right-handed axes (a mirrored shape is drawn inside out).
+    #[test]
+    fn every_drawn_shape_is_right_handed() {
+        let mut g = tests::game();
+        g.begin();
+        let mut t = 0i64;
+        let check = |g: &Game, when: &str| {
+            for (k, v) in g
+                .dynamic
+                .chunks(INSTANCE_VALUES)
+                .chain(g.scenery.values.chunks(INSTANCE_VALUES))
+                .enumerate()
+            {
+                let a = Affine {
+                    c0: v3(v[0], v[1], v[2]),
+                    c1: v3(v[4], v[5], v[6]),
+                    c2: v3(v[8], v[9], v[10]),
+                    t: v3(v[3], v[7], v[11]),
+                };
+                assert!(
+                    render::right_handed(&a),
+                    "{when}: instance {k} is mirrored: {a:?}"
+                );
+            }
+        };
+        check(&g, "house");
+        for _ in 0..(60 * 5 + 200) {
+            t += TICK_US;
+            g.advance(t, USE | FOCUS, 0, 0);
+        }
+        check(&g, "folded");
+        g.driving = true;
+        g.frame();
+        check(&g, "driving");
+    }
+}

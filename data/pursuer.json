@@ -1,0 +1,15 @@
+{
+  "_about": "How the pursuer moves. Speeds in metres a second, times in seconds, sizes in metres. It rises `spawn_distance` metres west of the house, takes `rise_seconds` to stand up and waits `wait_seconds` more, then walks straight at you through anything in the way, gaining `accel` m/s every second up to `max_speed`, turning at most `turn_degrees` a second. Further than `catchup_distance` away it moves `catchup_percent` faster, so it is always in the mirror.",
+  "spawn_distance": 230,
+  "rise_seconds": 2.5,
+  "wait_seconds": 1.5,
+  "start_speed": 9,
+  "accel": 0.16,
+  "max_speed": 46,
+  "turn_degrees": 32,
+  "catchup_distance": 240,
+  "catchup_percent": 60,
+  "width": 40,
+  "height": 60,
+  "reach_percent": 70
+}

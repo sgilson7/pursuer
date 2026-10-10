@@ -1,0 +1,5 @@
+{
+  "_about": "How the page draws on a computer without a graphics card: renderers whose names hold one of `software` draw at `software_scale` of the screen's resolution.",
+  "software": ["SwiftShader", "llvmpipe", "Software", "Microsoft Basic Render"],
+  "software_scale": 0.5
+}

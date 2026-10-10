@@ -1,0 +1,123 @@
+{
+ "_about": "The music when the pursuer stands up. Set `file` to the path of a recording under web/ (for example \"audio/pursuit.mp3\") to play it on a loop; with `file` null the page plays the original tune below, synthesized: `notes` are [frequency in Hz (0 a rest), seconds], under a drone of `drone` Hz. The request asked for \"Are You Coming to the Tree\" from The Hunger Games; that recording is not published with this game (SECOND-ORDER M1).",
+ "file": null,
+ "volume": 0.5,
+ "gain": 0.16,
+ "vibrato_hz": 5.2,
+ "vibrato_depth": 6,
+ "attack": 0.08,
+ "release": 0.25,
+ "drone": [
+  73.42,
+  110.0,
+  146.83
+ ],
+ "drone_gain": 0.035,
+ "notes": [
+  [
+   587.33,
+   1.185
+  ],
+  [
+   698.46,
+   0.395
+  ],
+  [
+   659.26,
+   0.79
+  ],
+  [
+   587.33,
+   0.79
+  ],
+  [
+   440.0,
+   1.58
+  ],
+  [
+   0,
+   0.79
+  ],
+  [
+   523.25,
+   0.79
+  ],
+  [
+   466.16,
+   1.185
+  ],
+  [
+   440.0,
+   0.395
+  ],
+  [
+   392.0,
+   0.79
+  ],
+  [
+   349.23,
+   0.79
+  ],
+  [
+   329.63,
+   2.37
+  ],
+  [
+   0,
+   0.79
+  ],
+  [
+   587.33,
+   1.185
+  ],
+  [
+   698.46,
+   0.395
+  ],
+  [
+   783.99,
+   0.79
+  ],
+  [
+   698.46,
+   0.79
+  ],
+  [
+   659.26,
+   1.58
+  ],
+  [
+   587.33,
+   0.79
+  ],
+  [
+   523.25,
+   0.79
+  ],
+  [
+   466.16,
+   0.79
+  ],
+  [
+   440.0,
+   0.79
+  ],
+  [
+   392.0,
+   0.79
+  ],
+  [
+   329.63,
+   0.79
+  ],
+  [
+   293.66,
+   2.37
+  ],
+  [
+   0,
+   0.79
+  ]
+ ],
+ "keep_voices": 24
+}

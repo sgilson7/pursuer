@@ -1,0 +1,12 @@
+{
+  "_about": "What the car gains as you survive. `at` is seconds since the pursuer stood up. `id` is the rule in crates/core/src/car.rs (Kit) it switches on; `name` and `text` are what the player reads when it arrives.",
+  "upgrades": [
+    { "id": "flip", "at": 0, "name": "Roll over", "text": "Hold R to roll the car back onto its wheels.", "key": "R" },
+    { "id": "big_wheels", "at": 25, "name": "Big wheels", "text": "Taller, grippier wheels with more drive, for climbing out of rubble.", "key": "" },
+    { "id": "hover", "at": 55, "name": "Hover", "text": "Space: float over the rubble for 3 seconds.", "key": "Space" },
+    { "id": "turbo", "at": 85, "name": "Turbo", "text": "A faster top speed.", "key": "" },
+    { "id": "wings", "at": 120, "name": "Wings", "text": "F: fly for 5 seconds. W dives, S climbs, A and D bank.", "key": "F" },
+    { "id": "turbo", "at": 170, "name": "Turbo II", "text": "Faster still.", "key": "" },
+    { "id": "turbo", "at": 240, "name": "Turbo III", "text": "As fast as it goes.", "key": "" }
+  ]
+}

@@ -1,0 +1,90 @@
+{
+  "_about": "The things in the house. Each is drawn from parts (a mesh, a centre and a size in centimetres from the item's foot, a colour, an optional tilt in degrees about x and turn about y) and stands at `at` (centimetres, house floor at y = 15). Holding one for `hold_seconds` brings its pursuer. `art` is the pursuer's cut-out under web/art/monsters/, `icon` the item's picture under web/art/items/.",
+  "hold_seconds": 5,
+  "items": [
+    {
+      "id": "teddy", "name": "the teddy bear", "monster": "buttons", "monster_name": "Mr. Buttons",
+      "line": "Mr. Buttons wants his bear back.",
+      "at": [-420, 60, 460], "turn": 0, "radius": 40,
+      "parts": [
+        ["sphere", 0, 22, 0, 34, 38, 28, "#B9835A"],
+        ["sphere", 0, 52, 0, 28, 26, 26, "#B9835A"],
+        ["sphere", -11, 66, 0, 10, 10, 6, "#7A5038"],
+        ["sphere", 11, 66, 0, 10, 10, 6, "#7A5038"],
+        ["sphere", 0, 49, -12, 12, 9, 8, "#E7C9A0"],
+        ["cube", -6, 56, -12, 4, 4, 2, "#2B2230"],
+        ["cube", 6, 56, -11, 5, 5, 2, "#E7C9A0"],
+        ["cube", 0, 40, -10, 16, 6, 4, "#E47A7E"],
+        ["sphere", -16, 8, -6, 12, 12, 12, "#B9835A"],
+        ["sphere", 16, 8, -6, 12, 12, 12, "#B9835A"]
+      ]
+    },
+    {
+      "id": "guitar", "name": "the electric guitar", "monster": "headliner", "monster_name": "The Headliner",
+      "line": "The Headliner is back for an encore.",
+      "at": [-230, 15, 545], "turn": 0, "radius": 55,
+      "parts": [
+        ["sphere", 0, 22, 0, 36, 34, 9, "#E47A7E", -12, 0],
+        ["sphere", 0, 44, 2, 28, 24, 9, "#E47A7E", -12, 0],
+        ["cube", 0, 34, -5, 10, 14, 2, "#F6E7C4", -12, 0],
+        ["cube", 0, 80, 9, 5, 64, 3, "#7A5038", -12, 0],
+        ["cube", 0, 116, 16, 8, 14, 3, "#3B2340", -12, 0]
+      ]
+    },
+    {
+      "id": "trophy", "name": "the trophy", "monster": "champion", "monster_name": "The Champion",
+      "line": "The Champion has come to defend the title.",
+      "at": [-860, 140, -200], "turn": 90, "radius": 30,
+      "parts": [
+        ["cube", 0, 3, 0, 18, 6, 18, "#3B2340"],
+        ["cube", 0, 9, 0, 13, 6, 13, "#7A5038"],
+        ["cyl", 0, 19, 0, 4, 14, 4, "#F2B53A"],
+        ["cyl", 0, 34, 0, 18, 18, 18, "#F2B53A"],
+        ["cube", -11, 36, 0, 4, 10, 2, "#F2B53A"],
+        ["cube", 11, 36, 0, 4, 10, 2, "#F2B53A"],
+        ["octa", 0, 50, 0, 10, 10, 4, "#F5DA92"]
+      ]
+    },
+    {
+      "id": "toaster", "name": "the toaster", "monster": "host", "monster_name": "The Morning Host",
+      "line": "The Morning Host is live, and you are the segment.",
+      "at": [300, 110, -530], "turn": 0, "radius": 30,
+      "parts": [
+        ["cube", 0, 10, 0, 28, 20, 17, "#E9E2D0"],
+        ["cube", 0, 1, 0, 30, 2, 19, "#5E6B66"],
+        ["cube", -5, 20, 0, 4, 2, 12, "#3E3A46"],
+        ["cube", 5, 20, 0, 4, 2, 12, "#3E3A46"],
+        ["cube", -5, 24, 0, 3, 10, 11, "#D9A15A"],
+        ["cube", 5, 23, 0, 3, 9, 11, "#D9A15A"],
+        ["cube", 15, 14, 0, 3, 3, 4, "#3B2340"]
+      ]
+    },
+    {
+      "id": "microphone", "name": "the microphone", "monster": "crooner", "monster_name": "The Crooner",
+      "line": "The Crooner is singing your song.",
+      "at": [-260, 15, -470], "turn": 0, "radius": 35,
+      "parts": [
+        ["cyl", 0, 1, 0, 36, 3, 36, "#3E3A46"],
+        ["cyl", 0, 75, 0, 3, 148, 3, "#5E6B66"],
+        ["cube", 0, 150, 0, 9, 14, 6, "#C8C0B0"],
+        ["cube", 0, 150, 0, 10, 4, 7, "#3E3A46"],
+        ["cube", 0, 141, 0, 6, 4, 6, "#5E6B66"]
+      ]
+    },
+    {
+      "id": "crown", "name": "the crown", "monster": "queen", "monster_name": "The Queen",
+      "line": "The Queen would like her crown.",
+      "at": [275, 90, 325], "turn": 0, "radius": 30,
+      "parts": [
+        ["cube", 0, 4, 0, 32, 8, 32, "#B3262E"],
+        ["cyl", 0, 14, 0, 20, 10, 20, "#F2B53A"],
+        ["cone", -7, 24, -7, 5, 9, 5, "#F2B53A"],
+        ["cone", 7, 24, -7, 5, 9, 5, "#F2B53A"],
+        ["cone", -7, 24, 7, 5, 9, 5, "#F2B53A"],
+        ["cone", 7, 24, 7, 5, 9, 5, "#F2B53A"],
+        ["sphere", 0, 14, -10, 5, 5, 3, "#13CFE3"],
+        ["sphere", 0, 30, 0, 6, 6, 6, "#FF2E88"]
+      ]
+    }
+  ]
+}

@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Reference default. connect-src 'self' keeps fetches on this origin;
+       'wasm-unsafe-eval' lets the page compile its own WebAssembly module;
+       form-action 'none' blocks form posts. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Pursuer</title>
+  <meta name="description" content="A first-person survival driving game in the browser. Hold on to something in the house for too long and a giant flat picture of someone it belongs to stands up and chases you through a city it tears apart.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body data-ready="false" data-mode="loading">
+  <canvas id="view"></canvas>
+
+  <!-- play -->
+  <div id="hud" hidden>
+    <div id="dread"></div>
+    <div id="danger"></div>
+    <div id="mirrors"></div>
+    <div id="reticle"></div>
+    <div id="prompt" hidden></div>
+    <div id="marker" hidden><span data-copy="marker_car"></span></div>
+    <div id="chase-top" hidden>
+      <div class="clock" id="h-time"></div>
+      <div class="sub"><span data-copy="hud_best"></span> <span id="h-best"></span></div>
+    </div>
+    <div id="chase-left" hidden>
+      <div class="pursuer"><span id="h-monster"></span></div>
+      <div class="dist"><span id="h-distance"></span> <span data-copy="unit_m"></span></div>
+    </div>
+    <div id="chase-right" hidden>
+      <div class="speed"><span id="h-speed"></span> <span data-copy="unit_kmh"></span></div>
+      <div id="abilities"></div>
+      <div class="next" id="h-next"></div>
+    </div>
+    <div id="toast" hidden><div class="name" id="t-name"></div><div class="text" id="t-text"></div></div>
+    <div id="flipnote" hidden data-copy="flip_hint"></div>
+    <div id="engage" hidden><button id="engage-btn" class="big" data-copy="click_to_play"></button></div>
+  </div>
+
+  <!-- the title -->
+  <div id="title" class="overlay" hidden>
+    <img class="art" src="art/title.png" alt="">
+    <div class="title-block">
+      <h1 data-copy="title"></h1>
+      <p class="subtitle" data-copy="subtitle"></p>
+      <button id="begin" class="big" data-copy="begin"></button>
+      <p class="best-line"><span data-copy="best_label"></span> <span id="title-best"></span></p>
+      <details class="about">
+        <summary data-copy="controls_heading"></summary>
+        <table class="controls"></table>
+      </details>
+      <p class="credit" data-copy="credit"></p>
+      <p class="credit" data-copy="music_note"></p>
+    </div>
+    <div id="build" class="build"></div>
+  </div>
+
+  <!-- paused -->
+  <div id="paused" class="overlay center" hidden>
+    <div class="panel">
+      <h2 data-copy="paused"></h2>
+      <button id="resume" class="big" data-copy="resume"></button>
+      <button id="quit" data-copy="quit"></button>
+      <table class="controls"></table>
+    </div>
+  </div>
+
+  <!-- caught -->
+  <div id="caught" class="overlay" hidden>
+    <img class="art" src="art/caught.png" alt="">
+    <div class="caught-block">
+      <div class="stamp" data-copy="caught_title"></div>
+      <p class="by"><span data-copy="caught_by"></span> <span id="c-monster"></span></p>
+      <p class="line" id="c-line"></p>
+      <div class="score"><span data-copy="survived"></span> <span id="c-time"></span></div>
+      <div class="best"><span data-copy="best_label"></span> <span id="c-best"></span> <span id="c-new" data-copy="new_best" hidden></span></div>
+      <div class="wreck"><span id="c-loosed"></span> <span data-copy="pieces_loosed"></span></div>
+      <button id="again" class="big" data-copy="again"></button>
+      <button id="to-title" data-copy="to_title"></button>
+    </div>
+    <img id="c-art" class="cutout" alt="">
+  </div>
+
+  <div id="message"></div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

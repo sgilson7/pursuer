@@ -1,0 +1,103 @@
+{
+ "_about": "Every number the page's sound needs. Each recipe is a list of layers: an oscillator sweeping `from` to `to` Hz, or the core's white noise through a filter. Times in seconds. The house is silent but for these: squeaky shoes and the sound of picking a thing up and putting it down.",
+ "master": 0.5,
+ "floor": 0.0001,
+ "tail": 0.05,
+ "noise_seconds": 2,
+ "seed": 2026,
+ "gap": 0.03,
+ "gaps": {
+  "squeak_l": 0.12,
+  "squeak_r": 0.12
+ },
+ "recipes": {
+  "squeak_l": [
+   {
+    "type": "osc",
+    "wave": "sine",
+    "from": 1500,
+    "to": 2300,
+    "at": 0,
+    "attack": 0.006,
+    "dur": 0.07,
+    "gain": 0.06
+   },
+   {
+    "type": "osc",
+    "wave": "triangle",
+    "from": 2300,
+    "to": 1700,
+    "at": 0.05,
+    "attack": 0.004,
+    "dur": 0.05,
+    "gain": 0.035
+   }
+  ],
+  "squeak_r": [
+   {
+    "type": "osc",
+    "wave": "sine",
+    "from": 1700,
+    "to": 2600,
+    "at": 0,
+    "attack": 0.006,
+    "dur": 0.06,
+    "gain": 0.055
+   },
+   {
+    "type": "osc",
+    "wave": "triangle",
+    "from": 2500,
+    "to": 1900,
+    "at": 0.045,
+    "attack": 0.004,
+    "dur": 0.05,
+    "gain": 0.03
+   }
+  ],
+  "pickup": [
+   {
+    "type": "noise",
+    "filter": "bandpass",
+    "freq": 2200,
+    "q": 1.5,
+    "at": 0,
+    "attack": 0.003,
+    "dur": 0.05,
+    "gain": 0.12
+   },
+   {
+    "type": "osc",
+    "wave": "sine",
+    "from": 420,
+    "to": 620,
+    "at": 0,
+    "attack": 0.005,
+    "dur": 0.09,
+    "gain": 0.06
+   }
+  ],
+  "putdown": [
+   {
+    "type": "noise",
+    "filter": "lowpass",
+    "freq": 700,
+    "q": 0.8,
+    "at": 0,
+    "attack": 0.002,
+    "dur": 0.07,
+    "gain": 0.2
+   },
+   {
+    "type": "osc",
+    "wave": "sine",
+    "from": 260,
+    "to": 160,
+    "at": 0,
+    "attack": 0.003,
+    "dur": 0.08,
+    "gain": 0.06
+   }
+  ]
+ }
+}

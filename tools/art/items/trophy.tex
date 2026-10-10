@@ -1,0 +1,101 @@
+\documentclass[tikz,border=0pt]{standalone}
+\usepackage{xcolor}
+% Palette: Sam_Comm_final.png by eye, and the cast's own colours.
+\definecolor{ink}{HTML}{3B2340}
+\definecolor{sky}{HTML}{EFC46A}
+\definecolor{skyhi}{HTML}{F5DA92}
+\definecolor{skylow}{HTML}{E9B060}
+\definecolor{cloud}{HTML}{F2D58A}
+\definecolor{wallA}{HTML}{E88A73}
+\definecolor{wallB}{HTML}{EE9F7E}
+\definecolor{wallC}{HTML}{E47A7E}
+\definecolor{wallD}{HTML}{F0B07E}
+\definecolor{wallE}{HTML}{D9765F}
+\definecolor{wallF}{HTML}{E99A8A}
+\definecolor{greenA}{HTML}{8DBB7E}
+\definecolor{greenB}{HTML}{6FA77A}
+\definecolor{greenC}{HTML}{A9C97F}
+\definecolor{greenD}{HTML}{5E9C6A}
+\definecolor{window}{HTML}{F6E7A0}
+\definecolor{windark}{HTML}{8C5A64}
+\definecolor{metal}{HTML}{8D9A93}
+\definecolor{metaldark}{HTML}{5E6B66}
+\definecolor{wood}{HTML}{B9835A}
+\definecolor{paving}{HTML}{E2BD8C}
+\definecolor{ground}{HTML}{D3A77D}
+\definecolor{stone}{HTML}{E7C9A0}
+\definecolor{road}{HTML}{C9957A}
+\definecolor{roadline}{HTML}{F3DFA8}
+\definecolor{paper}{HTML}{F6E7C4}
+\definecolor{paperdark}{HTML}{E3CC98}
+\definecolor{cardboard}{HTML}{C9A06A}
+\definecolor{cardboarddark}{HTML}{A47C4C}
+\definecolor{cutedge}{HTML}{A8998A}
+\definecolor{magenta}{HTML}{FF2E88}
+\definecolor{cyan}{HTML}{13CFE3}
+\definecolor{gold}{HTML}{FFB000}
+\definecolor{trim}{HTML}{F26B38}
+\definecolor{violet}{HTML}{7B2FF7}
+\definecolor{skin}{HTML}{E8B07C}
+\definecolor{skinB}{HTML}{C98B5E}
+\definecolor{skinC}{HTML}{F2C9A0}
+\definecolor{skinshade}{HTML}{D4956A}
+\definecolor{eyewhite}{HTML}{FBF4E4}
+\definecolor{mouth}{HTML}{5A2238}
+\definecolor{teeth}{HTML}{FBF4E4}
+\definecolor{blush}{HTML}{F08A8A}
+\definecolor{hairdark}{HTML}{2A1E33}
+\definecolor{leather}{HTML}{33293D}
+\definecolor{leatherhi}{HTML}{54466A}
+\definecolor{denim}{HTML}{46597A}
+\definecolor{guitar}{HTML}{D2463C}
+\definecolor{goldbelt}{HTML}{F2B53A}
+\definecolor{golddark}{HTML}{C98A1E}
+\definecolor{red}{HTML}{B3262E}
+\definecolor{royal}{HTML}{5E3A87}
+\definecolor{fur}{HTML}{C98A55}
+\definecolor{furlight}{HTML}{EBC592}
+\definecolor{bow}{HTML}{E2577A}
+\definecolor{patch}{HTML}{6FA77A}
+\definecolor{chef}{HTML}{F6EBD2}
+\definecolor{chefdark}{HTML}{D9C7A0}
+\definecolor{shirt}{HTML}{5FA8A0}
+\definecolor{check}{HTML}{9AA3A0}
+\definecolor{toast}{HTML}{E9B55E}
+\definecolor{crust}{HTML}{A8693C}
+\definecolor{butter}{HTML}{F7DE6A}
+\definecolor{tux}{HTML}{2E2638}
+\definecolor{tuxhi}{HTML}{4F4460}
+\definecolor{shirtwhite}{HTML}{F8F0DE}
+\definecolor{chrome}{HTML}{C9D3CF}
+\definecolor{chromedark}{HTML}{7F8C88}
+\definecolor{velvet}{HTML}{A8324A}
+\definecolor{ermine}{HTML}{F7F0DF}
+\definecolor{gown}{HTML}{5E9C6A}
+\definecolor{hairq}{HTML}{CFC6D8}
+\definecolor{jewelB}{HTML}{13A6C9}
+\definecolor{car}{HTML}{4FA3A5}
+\definecolor{cardark}{HTML}{2F7476}
+\definecolor{tyre}{HTML}{3E3A46}
+\definecolor{glass}{HTML}{A9D4CB}
+\definecolor{lamp}{HTML}{FFE6A3}
+\definecolor{smoke}{HTML}{E8D3AE}
+\definecolor{shingle}{HTML}{C9604F}
+\begin{document}
+\begin{tikzpicture}
+\clip (0,0) rectangle (4,4);
+\filldraw[draw=ink, line width=1.6pt, line join=round, fill=wood] (1,0.3) -- (3,0.3) -- (3,0.75) -- (1,0.75) -- cycle;
+\filldraw[draw=ink, line width=1.6pt, line join=round, fill=goldbelt] (1.25,0.75) -- (2.75,0.75) -- (2.45,1.15) -- (1.55,1.15) -- cycle;
+\filldraw[draw=ink, line width=1.6pt, line join=round, fill=goldbelt] (1.85,1.15) -- (2.15,1.15) -- (2.15,1.9) -- (1.85,1.9) -- cycle;
+\filldraw[draw=ink, line width=1.6pt, line join=round, fill=golddark] plot[smooth cycle, tension=0.55] coordinates {(2.35,1.95) (2.333,1.993) (2.283,2.032) (2.206,2.063) (2.108,2.083) (2,2.09) (1.892,2.083) (1.794,2.063) (1.717,2.032) (1.667,1.993) (1.65,1.95) (1.667,1.907) (1.717,1.868) (1.794,1.837) (1.892,1.817) (2,1.81) (2.108,1.817) (2.206,1.837) (2.283,1.868) (2.333,1.907)};
+\draw[ink, line width=5.4pt, line cap=round, line join=round] plot[smooth, tension=0.6] coordinates {(1.15,3.25) (0.65,3.1) (0.7,2.5) (1.3,2.25)};
+\draw[goldbelt, line width=2.6pt, line cap=round, line join=round] plot[smooth, tension=0.6] coordinates {(1.15,3.25) (0.65,3.1) (0.7,2.5) (1.3,2.25)};
+\draw[ink, line width=5.4pt, line cap=round, line join=round] plot[smooth, tension=0.6] coordinates {(2.85,3.25) (3.35,3.1) (3.3,2.5) (2.7,2.25)};
+\draw[goldbelt, line width=2.6pt, line cap=round, line join=round] plot[smooth, tension=0.6] coordinates {(2.85,3.25) (3.35,3.1) (3.3,2.5) (2.7,2.25)};
+\filldraw[draw=ink, line width=1.6pt, line join=round, fill=goldbelt] plot[smooth cycle, tension=0.45] coordinates {(0.9,3.55) (3.1,3.55) (2.95,2.8) (2.45,2.1) (2,1.95) (1.55,2.1) (1.05,2.8)};
+\filldraw[draw=ink, line width=1.6pt, line join=round, fill=golddark] plot[smooth cycle, tension=0.55] coordinates {(3.1,3.55) (3.046,3.606) (2.89,3.656) (2.647,3.696) (2.34,3.721) (2,3.73) (1.66,3.721) (1.353,3.696) (1.11,3.656) (0.954,3.606) (0.9,3.55) (0.954,3.494) (1.11,3.444) (1.353,3.404) (1.66,3.379) (2,3.37) (2.34,3.379) (2.647,3.404) (2.89,3.444) (3.046,3.494)};
+\filldraw[draw=ink, line width=1.6pt, line join=round, fill=golddark] (2,3.2) -- (1.881,2.914) -- (1.572,2.889) -- (1.807,2.687) -- (1.735,2.386) -- (2,2.547) -- (2.265,2.386) -- (2.193,2.687) -- (2.428,2.889) -- (2.119,2.914) -- cycle;
+\filldraw[draw=ink, line width=1.12pt, line join=round, fill=red] (2,2.75) circle (0.12);
+\draw[white, line width=2.2pt, line cap=round, line join=round, opacity=0.7] (1.3,3.2) -- (1.45,2.6);
+\end{tikzpicture}
+\end{document}
