@@ -8,7 +8,7 @@
 | --- | --- |
 | Repository | https://github.com/sgilson7/pursuer (public, MIT) |
 | The game | https://sgilson7.github.io/pursuer/ (Pages, deployed by `.github/workflows/deploy.yml` after the check passes) |
-| Website page | `~/Documents/website`: `content/projects/pursuer.md`, an entry in `content/projects.yaml`, `/pursuer/` in `OFF_BUILD_ROUTES` |
+| Website page | https://sgilson7.github.io/projects/pursuer/, from `~/Documents/website` commit `932e6bc` (`content/projects/pursuer.md`, an entry in `content/projects.yaml`, `/pursuer/` in `OFF_BUILD_ROUTES`) |
 
 ## Done, against the brief
 
@@ -35,6 +35,10 @@
 | `./scripts/check.sh` (three engines) | BUILDER CHECK PASSED: fmt, clippy, 76 core tests and 11 boundary tests, wasm build, import audit, browser check in Chromium, Firefox and WebKit |
 | `cargo test --release -p pursuer_core --test perf_probe -- --ignored --nocapture` | see `MEASUREMENTS.md` |
 | `python3 tools/shots.py OUT drive|watch|everything` | screenshots and frame rates, Metal GPU |
+
+Live checks: the Pursuer browser check against https://sgilson7.github.io/pursuer passed in Chromium; the website's `make gate-live` passed in three engines.
+
+The website page went live at 12:41 inside build `915132a3`, published by another session's deploy that built from the working tree while this change was still uncommitted; this session's `make deploy` at 12:45 found the same build live, and commit `932e6bc` records the change.
 
 ## Waiting on Sam
 
