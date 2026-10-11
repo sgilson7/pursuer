@@ -35,7 +35,7 @@
 
 | Command | Result |
 | --- | --- |
-| `./scripts/check.sh` (four runs) | BUILDER CHECK PASSED: fmt, clippy, 94 core tests and 11 boundary tests (fifth round: touch controls, the tall view, the tilting mirror, staging for film), wasm build, import audit, browser check in Chromium, Firefox, WebKit and WebKit as an iPhone 15 played by touch |
+| `./scripts/check.sh` (five runs) | BUILDER CHECK PASSED: fmt, clippy, 95 core tests (the fifth run added the still house after a catch) and 11 boundary tests (fifth round: touch controls, the tall view, the tilting mirror, staging for film), wasm build, import audit, browser check in Chromium, Firefox, WebKit and WebKit as an iPhone 15 played by touch |
 | `python tools/mobile.py OUT "iPad Pro 11" --landscape`, and `"iPhone 15"` both ways | screenshots of touch play in WebKit |
 | `python tools/film/shorts.py mirror|ruins|whole_run` | the three shorts in `~/Movies/Pursuer/` |
 | `cargo test --release -p pursuer_core --test perf_probe -- --ignored --nocapture` | see `MEASUREMENTS.md` |

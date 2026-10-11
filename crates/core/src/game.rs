@@ -418,6 +418,7 @@ impl Game {
         self.look_yaw = 0;
         self.look_pitch = 0;
         self.scare = 0;
+        self.shake = 0;
         // let the car settle on its wheels
         for _ in 0..90 {
             self.car
@@ -1908,6 +1909,29 @@ pub(crate) mod tests {
         assert!(g.ticks() > 60 * 10, "{}", g.ticks());
         assert!(g.saved().contains(&g.ticks().to_string()));
         assert!(g.city().stats.loosed > 0, "it broke things on the way");
+    }
+
+    #[test]
+    fn back_in_the_house_after_being_caught_the_view_is_still() {
+        for again in [false, true] {
+            let mut g = game();
+            g.begin();
+            let mut t = 0;
+            run(&mut g, USE, 60 * 5 + 5, &mut t);
+            run(&mut g, 0, 60 * 60, &mut t);
+            assert_eq!(g.mode(), Mode::Caught);
+            assert!(g.shake > ONE / 2, "caught, the view shakes: {}", g.shake);
+            if again {
+                g.again();
+            } else {
+                g.begin();
+            }
+            run(&mut g, 0, 30, &mut t);
+            assert_eq!(g.mode(), Mode::House);
+            let hud: serde_json::Value = serde_json::from_str(&g.hud_json()).unwrap();
+            assert_eq!(g.shake, 0, "the house shakes after a restart");
+            assert_eq!(hud["danger"], "0.000");
+        }
     }
 
     #[test]
