@@ -1,22 +1,30 @@
-"""A short from a recording of a person playing (OBS or any screen
-recorder), cut the way edit.py cuts filmed takes: the game picture found
-and filled to 1080 x 1920, the parts kept, captions burned in, the line that
-it plays on a phone across the top, and an end card that loops.
+"""A short from a recording of a person playing (record_tab.py's, OBS's or any
+screen recorder's), cut the way edit.py cuts filmed takes: the game picture
+found and filled to 1080 x 1920, the clips a cut list names in the order it
+names them, captions burned in, the line that it plays on a phone across the
+top, and an end card that loops.
 
-    python tools/film/from_obs.py RECORDING OUT.mp4 [--keep 3-14,22.5-31]
-        [--cap "0-2.5:Kanye is right behind me:hook"] ... [--slow 9-10.5]
-        [--box x0,y0,x1,y1] [--no-tag] [--no-end]
+    python tools/film/from_obs.py PLAN.json OUT.mp4
 
-Times are seconds in the recording. `--keep` lists the stretches to use, in
-order (all of it when left out). `--cap` is START-END:TEXT[:STYLE], the
-styles edit.py's (hook, beat, low, small, under, tag, end), times in the
-recording. `--slow` plays a stretch at half speed, its sound slowed with it.
-`--box` is the game's picture in the recording's pixels; when left out it is
-found: the part of the frame that is not black, less the window's title bar.
+The plan (times are seconds in the recording):
 
-The recording's own sound (the game's music and its noises) is kept.
+    {"source": "recording60.mp4",          # relative to the plan's folder
+     "box": [x0, y0, x1, y1],               # the game's picture; found when left out
+     "tag": true, "end": true,
+     "clips": [
+       {"from": 68.3, "to": 70.8,
+        "speed": 0.5,                       # slow motion (sound slowed with it)
+        "caps": [["Kanye came through the wall", "hook"]],
+        "punch": [1.0, 1.25], "at": [0.5, 0.35],   # a zoom across the clip, centred there
+        "flash": true,                      # a white flash at the cut in
+        "hit": "hard",                      # an impact on the sound at the cut in
+        "shake": 0.6}, ...]}
+
+Caption styles are edit.py's (hook, beat, low, small, under, tag, end). The
+recording's own sound (the game's music and its noises) is kept, softened
+at each cut so the jumps do not click, with the hits laid over it.
 """
-import argparse, json, subprocess, sys
+import json, random, subprocess, sys
 from pathlib import Path
 
 import imageio_ffmpeg
@@ -24,21 +32,23 @@ import numpy as np
 from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from edit import H, INK, W, caption  # noqa: E402
+from edit import H, INK, W, caption, synth, write_wav  # noqa: E402
 
 FPS = 30
 TAG = "Free · plays in your phone's browser too"
 END = ["Pursuer", "Free in your browser, on a phone or a computer", "sgilson7.github.io/pursuer"]
+END_SECONDS = 2.5
 FF = imageio_ffmpeg.get_ffmpeg_exe()
 
 
 def probe(path):
     out = subprocess.run([FF, "-hide_banner", "-i", str(path)], capture_output=True, text=True).stderr
     line = next(l for l in out.splitlines() if "Video:" in l)
-    w, h = next(tok for tok in line.replace(",", " ").split() if "x" in tok and tok.split("x")[0].isdigit() and tok.split("x")[1].isdigit()).split("x")
-    dur = out.split("Duration:")[1].split(",")[0].strip()
-    hh, mm, ss = dur.split(":")
-    return int(w), int(h), int(hh) * 3600 + int(mm) * 60 + float(ss)
+    toks = line.replace(",", " ").split()
+    w, h = next(t for t in toks if "x" in t and all(p.isdigit() for p in t.split("x"))).split("x")
+    fps = float(toks[toks.index("fps") - 1])
+    hh, mm, ss = out.split("Duration:")[1].split(",")[0].strip().split(":")
+    return int(w), int(h), fps, int(hh) * 3600 + int(mm) * 60 + float(ss), "Audio:" in out
 
 
 def frame_at(path, t, w, h):
@@ -49,106 +59,112 @@ def frame_at(path, t, w, h):
 
 def find_box(path, w, h, dur):
     """The game's picture: what is not black in a few frames, and the
-    window's title bar (a band of flat grey at the top) cut off, leaving
-    the tallest 9:16-or-narrower picture under it."""
+    window's title bar (a band of flat grey at the top) cut off."""
     lit = np.zeros((h, w), bool)
     for t in np.linspace(dur * 0.1, dur * 0.9, 5):
         lit |= frame_at(path, t, w, h).max(axis=2) > 12
     ys, xs = np.nonzero(lit)
     x0, x1, y0, y1 = xs.min(), xs.max() + 1, ys.min(), ys.max() + 1
     f = frame_at(path, dur * 0.5, w, h)[y0:y1, x0:x1].astype(int)
-    # rows of one flat colour from the top, judged in from the edges (the
+    # rows of one flat grey from the top, judged in from the edges (the
     # window's corners are rounded): the title bar
     inner = f[:, (x1 - x0) // 10 : (x1 - x0) * 9 // 10]
     top = 0
-    while top < (y1 - y0) // 8 and inner[top].std(axis=0).max() < 6:
+    while top < (y1 - y0) // 8 and inner[top].std(axis=0).max() < 6 and np.ptp(inner[top].mean(axis=0)) < 8:
         top += 1
-    return x0, y0 + top, x1, y1
+    return int(x0), int(y0 + top), int(x1), int(y1)
 
 
-def parse_spans(text):
-    return [tuple(float(v) for v in part.split("-")) for part in text.split(",")] if text else None
+def to_916(box):
+    """The box cut down at its sides or top and bottom to 9:16."""
+    x0, y0, x1, y1 = box
+    bw, bh = x1 - x0, y1 - y0
+    if bw / bh > W / H:
+        cut = bw - bh * W / H
+        x0, x1 = x0 + cut / 2, x1 - cut / 2
+    else:
+        cut = bh - bw * H / W
+        y0, y1 = y0 + cut / 2, y1 - cut / 2
+    return int(x0), int(y0), int(x1), int(y1)
+
+
+def clip_frames(src, box, t0, t1):
+    """The clip's frames, cropped and filled to 1080 x 1920, at the source's rate."""
+    x0, y0, x1, y1 = box
+    vf = f"crop={x1 - x0}:{y1 - y0}:{x0}:{y0},scale={W}:{H}:flags=lanczos"
+    raw = subprocess.run([FF, "-loglevel", "error", "-ss", f"{t0:.3f}", "-i", str(src), "-t", f"{t1 - t0:.3f}", "-vf", vf,
+                          "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], capture_output=True, check=True).stdout
+    n = len(raw) // (W * H * 3)
+    return [raw[k * W * H * 3 : (k + 1) * W * H * 3] for k in range(n)]
+
+
+def punch(img, z, at, jx=0.0, jy=0.0):
+    if z <= 1.0 and not (jx or jy):
+        return img
+    z = max(z, 1.0)
+    cw, ch = W / z, H / z
+    cx = min(max(at[0] * W + jx * W, cw / 2), W - cw / 2)
+    cy = min(max(at[1] * H + jy * H, ch / 2), H - ch / 2)
+    return img.crop((int(cx - cw / 2), int(cy - ch / 2), int(cx + cw / 2), int(cy + ch / 2))).resize((W, H), Image.LANCZOS)
+
+
+def atempo(speed):
+    chain, s = [], speed
+    while s < 0.5:
+        chain.append("atempo=0.5")
+        s /= 0.5
+    chain.append(f"atempo={s:.4f}")
+    return ",".join(chain)
 
 
 def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("recording")
-    ap.add_argument("out")
-    ap.add_argument("--keep")
-    ap.add_argument("--cap", action="append", default=[])
-    ap.add_argument("--slow", action="append", default=[])
-    ap.add_argument("--box")
-    ap.add_argument("--no-tag", action="store_true")
-    ap.add_argument("--no-end", action="store_true")
-    a = ap.parse_args()
+    plan_path, out = Path(sys.argv[1]), Path(sys.argv[2])
+    plan = json.loads(plan_path.read_text())
+    src = (plan_path.parent / plan["source"]).resolve()
+    w, h, src_fps, dur, has_audio = probe(src)
+    box = to_916(tuple(plan["box"]) if plan.get("box") else find_box(src, w, h, dur))
+    print(f"{src.name}: {w}x{h} at {src_fps:g} fps, {dur:.1f} s; picture {box}")
 
-    src, out = Path(a.recording), Path(a.out)
-    w, h, dur = probe(src)
-    box = tuple(int(v) for v in a.box.split(",")) if a.box else find_box(src, w, h, dur)
-    bx0, by0, bx1, by1 = box
-    # fill 1080 x 1920: crop the box's sides or top to 9:16
-    bw, bh = bx1 - bx0, by1 - by0
-    if bw / bh > W / H:
-        cut = bw - bh * W / H
-        bx0, bx1 = bx0 + cut / 2, bx1 - cut / 2
-    else:
-        cut = bh - bw * H / W
-        by0, by1 = by0 + cut / 2, by1 - cut / 2
-    print(f"recording {w}x{h}, {dur:.1f} s; game picture {box}, used {int(bx0)},{int(by0)},{int(bx1)},{int(by1)}")
-
-    keep = parse_spans(a.keep) or [(0.0, dur)]
-    slow = [tuple(float(v) for v in s.split("-")) for s in a.slow]
-    caps = []
-    for c in a.cap:
-        span, rest = c.split(":", 1)
-        text, _, style = rest.rpartition(":") if rest.rsplit(":", 1)[-1] in ("hook", "beat", "low", "small", "under", "tag", "end") else (rest, "", "hook")
-        t0, t1 = (float(v) for v in span.split("-"))
-        caps.append((t0, t1, text, style))
-
-    # the film's frames: each a time in the recording (slow stretches give two frames a source frame)
-    times = []
-    for t0, t1 in keep:
-        t = t0
-        while t < t1:
-            times.append(t)
-            t += 1 / FPS / (2 if any(s0 <= t < s1 for s0, s1 in slow) else 1)
-
-    # decode the whole recording once, at 30 fps, cropped and scaled
-    crop = f"crop={int(bx1 - bx0)}:{int(by1 - by0)}:{int(bx0)}:{int(by0)},scale={W}:{H}:flags=lanczos,fps={FPS}"
-    dec = subprocess.Popen([FF, "-loglevel", "quiet", "-i", str(src), "-vf", crop, "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], stdout=subprocess.PIPE)
-    silent = out.with_suffix(".video.mp4")
     out.parent.mkdir(parents=True, exist_ok=True)
+    silent = out.with_suffix(".video.mp4")
     enc = subprocess.Popen([FF, "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-r", str(FPS), "-i", "-",
                             "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18", "-preset", "medium", str(silent)], stdin=subprocess.PIPE)
-    size = W * H * 3
-    have, frame, last = -1, None, None
-    shown, age = None, 0
-    for t in times:
-        want = int(t * FPS)
-        while have < want:
-            buf = dec.stdout.read(size)
-            if len(buf) < size:
-                break
-            frame, have = buf, have + 1
-        if frame is None:
-            break
-        img = Image.frombytes("RGB", (W, H), frame)
-        on = [(text, style) for t0, t1, text, style in caps if t0 <= t < t1]
-        if not a.no_tag:
-            on.append((TAG, "tag"))
-        key = json.dumps(on)
-        age = age + 1 if key == shown else 0
-        shown = key
-        for text, style in on:
-            caption(img, text, style, age)
-        enc.stdin.write(img.tobytes())
-        last = Image.frombytes("RGB", (W, H), frame)
-    dec.stdout.close()
-    dec.kill()
-    dec.wait()
+    rnd = random.Random(5)
+    hits, shown, age, n_out, last = [], None, 0, 0, None
+    for clip in plan["clips"]:
+        t0, t1, speed = clip["from"], clip["to"], clip.get("speed", 1.0)
+        frames = clip_frames(src, box, t0, t1)
+        count = max(1, round((t1 - t0) / speed * FPS))
+        z0, z1 = clip.get("punch", [1.0, 1.0])
+        at = clip.get("at", [0.5, 0.5])
+        if clip.get("hit"):
+            hits.append((n_out / FPS, 0.4 if clip["hit"] == "soft" else 1.0))
+        for k in range(count):
+            t = k / FPS * speed
+            idx = min(len(frames) - 1, int(t * src_fps))
+            img = Image.frombytes("RGB", (W, H), frames[idx])
+            last = img
+            f = k / max(1, count - 1)
+            # ease the punch-in
+            z = z0 + (z1 - z0) * (1 - (1 - f) ** 2)
+            s = clip.get("shake", 0) * max(0.0, 1 - k / 12)
+            jx, jy = (rnd.uniform(-1, 1) * s * 0.02, rnd.uniform(-1, 1) * s * 0.02) if s else (0, 0)
+            img = punch(img, z + (0.04 if s else 0), at, jx, jy)
+            if clip.get("flash") and k < 6:
+                img = Image.blend(img, Image.new("RGB", (W, H), (255, 255, 255)), 0.85 * (1 - k / 6))
+            on = [tuple(c) for c in clip.get("caps", [])]
+            if plan.get("tag", True):
+                on.append((TAG, "tag"))
+            key = json.dumps(on)
+            age = age + 1 if key == shown else 0
+            shown = key
+            for text, style in on:
+                caption(img, text, style, age)
+            enc.stdin.write(img.tobytes())
+            n_out += 1
     end_frames = 0
-    if not a.no_end and last is not None:
-        end_frames = int(2.5 * FPS)
+    if plan.get("end", True) and last is not None:
+        end_frames = int(END_SECONDS * FPS)
         for k in range(end_frames):
             img = Image.blend(last, Image.new("RGB", (W, H), INK), min(0.72, k / 8 * 0.72))
             caption(img, END[0], "beat", k)
@@ -157,29 +173,39 @@ def main():
             enc.stdin.write(img.tobytes())
     enc.stdin.close()
     enc.wait()
+    length = (n_out + end_frames) / FPS
 
-    # the sound: the same stretches of the recording's audio, slowed where the picture is
-    parts, labels = [], []
-    pieces = []
-    for t0, t1 in keep:
-        cuts = sorted({t0, t1, *[v for s in slow for v in s if t0 < v < t1]})
-        for c0, c1 in zip(cuts, cuts[1:]):
-            pieces.append((c0, c1, any(s0 <= c0 < s1 for s0, s1 in slow)))
-    for k, (c0, c1, slowed) in enumerate(pieces):
-        parts.append(f"[1:a]atrim={c0:.3f}:{c1:.3f},asetpts=PTS-STARTPTS{',atempo=0.5' if slowed else ''}[p{k}]")
-        labels.append(f"[p{k}]")
-    length = len(times) / FPS + end_frames / FPS
-    fade = max(0.0, length - 1.2)
-    graph = ";".join(parts) + f";{''.join(labels)}concat=n={len(labels)}:v=0:a=1,apad,atrim=0:{length:.3f},afade=t=out:st={fade:.2f}:d=1.2[a]"
-    has_audio = "Audio:" in subprocess.run([FF, "-hide_banner", "-i", str(src)], capture_output=True, text=True).stderr
-    if has_audio:
-        subprocess.run([FF, "-y", "-loglevel", "error", "-i", str(silent), "-i", str(src), "-filter_complex", graph,
-                        "-map", "0:v", "-map", "[a]", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", str(out)], check=True)
-        silent.unlink()
-    else:
+    if not has_audio:
         silent.rename(out)
-        print("the recording has no sound: the short is silent (add a sound in TikTok)")
-    print(f"wrote {out}: {length:.1f} s")
+        print(f"wrote {out}: {length:.1f} s, silent (the recording has no sound)")
+        return
+    # the sound: each clip's stretch of the recording (slowed with the picture), faded in and out
+    # a little at each cut, then the recording running on under the end card
+    parts, labels = [], []
+    clips = plan["clips"]
+    for k, c in enumerate(clips):
+        speed = c.get("speed", 1.0)
+        span = (c["to"] - c["from"]) / speed
+        tempo = f",{atempo(speed)}" if speed != 1.0 else ""
+        parts.append(f"[0:a]atrim={c['from']:.3f}:{c['to']:.3f},asetpts=PTS-STARTPTS{tempo},"
+                     f"afade=t=in:d=0.03,afade=t=out:st={max(0, span - 0.05):.3f}:d=0.05[p{k}]")
+        labels.append(f"[p{k}]")
+    tail_from = clips[-1]["to"]
+    parts.append(f"[0:a]atrim={tail_from:.3f}:{tail_from + END_SECONDS:.3f},asetpts=PTS-STARTPTS,afade=t=in:d=0.03[tail]")
+    labels.append("[tail]")
+    wav = out.with_suffix(".fx.wav")
+    write_wav(wav, synth(length, hits, []))
+    fade = max(0.0, length - 1.2)
+    graph = (";".join(parts) + f";{''.join(labels)}concat=n={len(labels)}:v=0:a=1[rec];[1:a]volume=0.55[h];"
+             f"[rec][h]amix=inputs=2:normalize=0,alimiter=limit=0.89:level=disabled,apad,atrim=0:{length:.3f},afade=t=out:st={fade:.2f}:d=1.2[a]")
+    subprocess.run([FF, "-y", "-loglevel", "error", "-i", str(src), "-i", str(wav), "-i", str(silent), "-filter_complex", graph,
+                    "-map", "2:v", "-map", "[a]", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-shortest", str(out)], check=True)
+    silent.unlink()
+    wav.unlink()
+    level = subprocess.run([FF, "-hide_banner", "-i", str(out), "-vn", "-af", "volumedetect", "-f", "null", "-"], capture_output=True, text=True).stderr
+    mean = float(level.split("mean_volume:")[1].split("dB")[0])
+    peak = float(level.split("max_volume:")[1].split("dB")[0])
+    print(f"wrote {out}: {length:.1f} s, {len(clips)} clips, {len(hits)} hits, audio mean {mean:.1f} dB, peak {peak:.1f} dB")
 
 
 if __name__ == "__main__":
