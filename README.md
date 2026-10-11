@@ -24,6 +24,8 @@ A first-person survival driving game that runs in the browser. You start in a ho
 | Esc | Pause |
 | N | Sound on or off |
 
+**On a phone or tablet** the same game plays by touch: a stick under the left thumb walks or drives (up is the accelerator, down the brake), a drag with the right thumb looks around, and buttons hold the rest: Grab, Run and Jump on foot; Brake, Flip and a button for each ability the car has drawn in the car, each filling as it recharges. II pauses. Held upright, the view widens to keep about 70° across, and the mirrors run across the top; turned sideways it is the desktop view. Checked in WebKit as an iPad and an iPhone; not yet on a real device.
+
 Add `#everything` to the address to knock the whole city loose at once when the page loads, which is the worst case the physics is built for.
 
 ## How it is built
@@ -43,6 +45,7 @@ The layers:
 - **`web/`** is a static page with a WebGL 2 canvas. It draws what the core returns.
 - **`data/`** holds every colour, item, pursuer number, upgrade, word, sound recipe, the tune and the shaders.
 - **`tools/art.py`** draws every picture as TikZ; the sources are in `tools/art/`.
+- **`tools/film/`** films the game for short vertical videos, after Vagrancy's `make_short.py`: the page with `#film` in its address stops its own loop and is stepped a frame at a time, as a phone, from a scene the core sets up (`Game::stage`); `shorts.py` holds the scenes and `edit.py` cuts them with captions, slow motion, mirror close-ups and synthesized hits. `tools/mobile.py` takes screenshots of a tablet or phone played by touch.
 
 ```bash
 ./scripts/setup.sh   # once: Playwright and three browser engines

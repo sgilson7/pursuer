@@ -1,16 +1,71 @@
 {
-  "_about": "What the car gains as you survive. `start` is the car's own, told when you first get in. At each time in `at` (seconds since the pursuer stood up) the core draws one of `pool` at random that the car does not have yet; entries that share an `id` (the turbos) come in the order listed. `id` is the rule in crates/core/src/car.rs (Kit) it switches on; `name` and `text` are what the player reads when it arrives.",
-  "start": { "id": "flip", "name": "Roll over", "text": "Hold R to roll the car back onto its wheels." },
-  "at": [25, 55, 85, 120, 170, 240, 320],
+  "_about": "What the car gains as you survive. `start` is the car's own, told when you first get in. At each time in `at` (seconds since the pursuer stood up) the core draws one of `pool` at random that the car does not have yet; entries that share an `id` (the turbos) come in the order listed. `id` is the rule in crates/core/src/car.rs (Kit) it switches on; `name` and `text` are what the player reads when it arrives. `touch` is the text on a touch screen, which names the ability's button.",
+  "start": {
+    "id": "flip",
+    "name": "Roll over",
+    "text": "Hold R to roll the car back onto its wheels.",
+    "touch": "Hold Flip to roll the car back onto its wheels."
+  },
+  "at": [
+    25,
+    55,
+    85,
+    120,
+    170,
+    240,
+    320
+  ],
   "pool": [
-    { "id": "big_wheels", "name": "Big wheels", "text": "Q: eight seconds on wheels tall enough to drive over a fallen building." },
-    { "id": "wings", "name": "Wings", "text": "F: fly for 5 seconds. W dives, S climbs, A and D bank." },
-    { "id": "dash", "name": "Dash", "text": "C: a kick toward whichever way W A S D point. Works in the air." },
-    { "id": "spin", "name": "Instant turn", "text": "X: swing straight round, speed and all. Hold A or D for a quarter turn." },
-    { "id": "nitrous", "name": "Nitrous", "text": "V: four seconds of rocket on loose tyres. Good luck steering." },
-    { "id": "leap", "name": "Leap", "text": "Space: jump the car about six metres up." },
-    { "id": "turbo", "name": "Turbo", "text": "A faster top speed." },
-    { "id": "turbo", "name": "Turbo II", "text": "Faster still." },
-    { "id": "turbo", "name": "Turbo III", "text": "As fast as it goes." }
+    {
+      "id": "big_wheels",
+      "name": "Big wheels",
+      "text": "Q: eight seconds on wheels tall enough to drive over a fallen building.",
+      "touch": "Eight seconds on wheels tall enough to drive over a fallen building."
+    },
+    {
+      "id": "wings",
+      "name": "Wings",
+      "text": "F: fly for 5 seconds. W dives, S climbs, A and D bank.",
+      "touch": "Fly for 5 seconds. Stick down climbs, up dives, sideways banks."
+    },
+    {
+      "id": "dash",
+      "name": "Dash",
+      "text": "C: a kick toward whichever way W A S D point. Works in the air.",
+      "touch": "A kick whichever way the stick points. Works in the air."
+    },
+    {
+      "id": "spin",
+      "name": "Instant turn",
+      "text": "X: swing straight round, speed and all. Hold A or D for a quarter turn.",
+      "touch": "Swing straight round, speed and all. Stick sideways for a quarter turn."
+    },
+    {
+      "id": "nitrous",
+      "name": "Nitrous",
+      "text": "V: four seconds of rocket on loose tyres. Good luck steering.",
+      "touch": "Four seconds of rocket on loose tyres. Good luck steering."
+    },
+    {
+      "id": "leap",
+      "name": "Leap",
+      "text": "Space: jump the car about six metres up.",
+      "touch": "Jump the car about six metres up."
+    },
+    {
+      "id": "turbo",
+      "name": "Turbo",
+      "text": "A faster top speed."
+    },
+    {
+      "id": "turbo",
+      "name": "Turbo II",
+      "text": "Faster still."
+    },
+    {
+      "id": "turbo",
+      "name": "Turbo III",
+      "text": "As fast as it goes."
+    }
   ]
 }

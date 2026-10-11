@@ -91,3 +91,55 @@ def run(page, check, engine):
     page.reload()
     page.wait_for_selector("body[data-ready='true']", state="attached", timeout=20000)
     check(page.text_content("#title-best") == survived, f"the best was kept ({page.text_content('#title-best')!r})")
+
+
+# A finger: pointer events of type touch, dispatched on a control as a
+# finger's are (Playwright's own touch only taps).
+FINGER = """([sel, type, dx, dy]) => {
+  const node = document.querySelector(sel);
+  const r = node.getBoundingClientRect();
+  node.dispatchEvent(new PointerEvent(type, { pointerId: 9, pointerType: 'touch', isPrimary: true,
+    clientX: r.left + r.width / 2 + dx, clientY: r.top + r.height / 2 + dy, bubbles: true, cancelable: true }));
+}"""
+
+
+def finger(page, sel, kind, dx=0, dy=0):
+    page.evaluate(FINGER, [sel, kind, dx, dy])
+
+
+def run_touch(page, check, engine):
+    """The same game on a phone, played with the touch controls: the copy
+    names the buttons, holding Grab brings the pursuer, the pause button
+    pauses, and the stick moves you."""
+    check(mode(page) == "title", f"the game opens on the title ({mode(page)})")
+    check(page.evaluate("() => document.body.classList.contains('touch')"), "a touch screen shows the touch controls")
+    check(page.is_visible(".mobile-line"), "the title says it plays on a phone")
+    page.tap("#begin")
+    page.wait_for_timeout(400)
+    check(mode(page) == "house", f"tapping Go inside starts in the house ({mode(page)})")
+    check(page.is_hidden("#engage"), "a touch screen needs no click to play")
+    teddy = ITEMS["items"][0]
+    want = COPY["prompt_pick_touch"].replace("{item}", teddy["name"])
+    check(page.inner_text("#prompt") == want, f"the prompt names the Grab button: {page.inner_text('#prompt')!r}")
+    grab = "#touch-buttons [data-id=use]"
+    check(page.is_visible(grab), "the Grab button shows on foot")
+    finger(page, grab, "pointerdown")
+    try:
+        page.wait_for_function("() => document.body.dataset.mode === 'chase'", timeout=60000)
+        chased = True
+    except Exception:
+        chased = False
+    finger(page, grab, "pointerup")
+    check(chased, f"holding Grab brings the pursuer ({mode(page)})")
+    check(page.inner_text("#prompt") == COPY["prompt_run"], f"and the page says to run: {page.inner_text('#prompt')!r}")
+    page.tap("#pause-btn")
+    page.wait_for_timeout(300)
+    check(mode(page) == "paused", f"the pause button pauses ({mode(page)})")
+    page.tap("#resume")
+    page.wait_for_timeout(300)
+    check(mode(page) == "chase", f"and Resume goes back ({mode(page)})")
+    finger(page, "#touch-pad", "pointerdown", -page.viewport_size["width"] / 4, page.viewport_size["height"] / 4)
+    finger(page, "#touch-pad", "pointermove", -page.viewport_size["width"] / 4, page.viewport_size["height"] / 4 - 70)
+    page.wait_for_timeout(300)
+    check(page.evaluate("() => document.getElementById('stick').classList.contains('live')"), "a left thumb is a stick")
+    finger(page, "#touch-pad", "pointerup")

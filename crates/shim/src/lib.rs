@@ -137,6 +137,19 @@ impl Game {
         self.inner.set_low_detail(low)
     }
 
+    pub fn set_touch(&mut self, touch: bool) {
+        self.inner.set_touch(touch)
+    }
+
+    /// For filming: a scene, as JSON (core `Game::stage`).
+    pub fn stage(&mut self, spec: &str) -> Result<(), JsValue> {
+        self.inner.stage(spec).map_err(|e| JsValue::from_str(&e))
+    }
+
+    pub fn probe(&mut self) -> String {
+        self.inner.probe()
+    }
+
     pub fn wreck_all(&mut self) {
         self.inner.wreck_all()
     }

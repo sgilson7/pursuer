@@ -81,5 +81,54 @@
    "N",
    "Sound on or off"
   ]
+ ],
+ "mobile_line": "Plays on a phone or tablet too: turn it sideways for the widest view.",
+ "touch_pause": "II",
+ "touch_use": "Grab",
+ "touch_jump": "Jump",
+ "touch_run": "Run",
+ "touch_brake": "Brake",
+ "touch_flip": "Flip",
+ "touch_big_wheels": "Big wheels",
+ "touch_wings": "Fly",
+ "touch_dash": "Dash",
+ "touch_spin": "Turn",
+ "touch_nitrous": "Nitro",
+ "touch_leap": "Leap",
+ "click_to_play_touch": "Tap to play",
+ "prompt_pick_touch": "Hold Grab to pick up {item}",
+ "prompt_holding_touch": "Holding {item}. Let go of Grab to put it down.",
+ "prompt_enter_touch": "Tap Grab to get in the car",
+ "prompt_record_touch": "Tap Grab to change the record",
+ "flip_hint_touch": "Upside down? Hold Flip to roll over.",
+ "controls_touch": [
+  [
+   "Left thumb",
+   "Walk, or drive: up is the accelerator, down the brake"
+  ],
+  [
+   "Right thumb",
+   "Drag to look"
+  ],
+  [
+   "Grab (hold)",
+   "Pick something up; get in the car"
+  ],
+  [
+   "Run, Brake",
+   "Run on foot; the handbrake in the car"
+  ],
+  [
+   "Flip (hold)",
+   "Roll the car back onto its wheels"
+  ],
+  [
+   "The car's buttons",
+   "Each ability gets its own button as you earn it"
+  ],
+  [
+   "II",
+   "Pause"
+  ]
  ]
 }

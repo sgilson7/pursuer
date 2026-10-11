@@ -22,7 +22,7 @@ export function makeInput(canvas, controls, actions, onEngage) {
     if (document.pointerLockElement && document.exitPointerLock) document.exitPointerLock();
   }
 
-  function engage() {
+  function engage(soft) {
     // Raw mouse input where the browser offers it; plain pointer lock where
     // it does not; and where neither works (an embedded frame, a headless
     // browser), the game still takes the keyboard and the mouse moves.
@@ -33,7 +33,8 @@ export function makeInput(canvas, controls, actions, onEngage) {
     // Under automation (the browser check) the lock may be granted and
     // dropped at once, which left the run frozen in play (SECOND-ORDER G9):
     // a driven browser always takes the fallback.
-    if (!canvas.requestPointerLock || navigator.webdriver) return fallBack();
+    // A touch screen (`soft`) has no pointer to lock.
+    if (soft || !canvas.requestPointerLock || navigator.webdriver) return fallBack();
     const tryPlain = () => {
       const plain = canvas.requestPointerLock();
       if (plain && plain.catch) plain.catch(fallBack);

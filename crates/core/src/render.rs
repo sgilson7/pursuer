@@ -178,6 +178,25 @@ pub struct View {
     pub layers: [bool; LAYERS],
 }
 
+/// On a screen taller than it is wide (a phone held upright), the vertical
+/// field of view a view needs so that it still sees `TALL_ACROSS` from side
+/// to side, up to `TALL_MOST`: a vertical angle meant for a wide screen
+/// leaves a tall one looking through a slot.
+pub const TALL_ACROSS: i32 = fx::deg(70);
+pub const TALL_MOST: i32 = fx::deg(110);
+
+pub fn tall_fov(fov: i32, w: i32, h: i32) -> i32 {
+    if h <= w || w <= 0 {
+        return fov;
+    }
+    let tan = |a: i32| fx::div(fx::sin(a / 2), fx::cos(a / 2));
+    let want = fx::div(fx::mul(tan(TALL_ACROSS), h), w);
+    if want <= tan(fov) {
+        return fov;
+    }
+    (fx::atan2(want, ONE) * 2).min(TALL_MOST)
+}
+
 impl View {
     pub fn matrix(&self) -> Mat4 {
         let aspect = fx::div(self.rect[2].max(1), self.rect[3].max(1));
@@ -320,6 +339,27 @@ mod tests {
             group(100, 250, v3(int(10), 0, -int(60))),
         ];
         assert_eq!(piece_runs(&groups, &v), vec![(0, 250)]);
+    }
+
+    #[test]
+    fn a_tall_screen_widens_the_view_so_it_still_sees_across() {
+        let fov = fx::deg(78);
+        assert_eq!(tall_fov(fov, 1920, 1080), fov, "a wide screen keeps its angle");
+        let tall = tall_fov(fov, 1080, 1920);
+        assert!(
+            tall > fx::deg(95) && tall <= TALL_MOST,
+            "{}",
+            tall * 360 / fx::TURN
+        );
+        // what it sees across, about 70°
+        let half = fx::div(fx::sin(tall / 2), fx::cos(tall / 2));
+        let across = fx::atan2(fx::mul(half, fx::div(1080, 1920)), ONE) * 2;
+        assert!(
+            (across - TALL_ACROSS).abs() < fx::deg(2),
+            "{}",
+            across * 360 / fx::TURN
+        );
+        assert_eq!(tall_fov(fov, 400, 3000), TALL_MOST, "and no wider than that");
     }
 
     #[test]

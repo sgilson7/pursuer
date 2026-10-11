@@ -14,7 +14,7 @@ use crate::geom::{facing, v3, Affine, V3};
 use crate::house::{self, House, Item, Shape};
 use crate::mesh::{self, Mesh};
 use crate::monster::{Monster, Tuning};
-use crate::quat::from_local;
+use crate::quat::{from_local, Quat};
 use crate::render::{
     self, Batch, Camera, View, BUF_DYNAMIC, BUF_PIECES, BUF_SCENERY, DRAW_VALUES, INSTANCE_VALUES, LAYERS,
     LAYER_CAR, LAYER_COCKPIT, LAYER_WORLD, MAT_VALUES, PASS_INK, PASS_SOLID, PASS_SPRITE, RECT_VALUES,
@@ -54,8 +54,16 @@ const DT: i32 = ONE / 60;
 /// How near an item must be to pick it up, and the car to get in.
 const REACH: i32 = ONE * 26 / 10;
 const CAR_REACH: i32 = ONE * 5;
+/// The rear-view mirror, in the car's frame, and how far it tilts from
+/// level (a little down) toward the pursuer's face (up).
+const REAR_EYE: V3 = v3(0, ONE * 88 / 100, ONE * 40 / 100);
+const REAR_TILT_LEAST: i32 = -deg(3);
+const REAR_TILT_MOST: i32 = deg(32);
 /// Within this many metres of the record player its callout shows.
 const PLAYER_CALLOUT: i32 = ONE * 9;
+/// The most pixels a touch screen is drawn at per CSS pixel, in percent: a
+/// phone's 3x screen costs more than it shows.
+const TOUCH_DPR_MOST: i32 = 200;
 /// How far a software renderer draws.
 const LOW_FAR: i32 = 320 * ONE;
 /// Mouse sensitivity: angle units per CSS pixel (scaled by 100 at the shim).
@@ -74,6 +82,9 @@ pub struct Upgrade {
     pub id: String,
     pub name: String,
     pub text: String,
+    /// the text for a touch screen, which names its button and not a key
+    #[serde(default)]
+    pub touch: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -258,6 +269,8 @@ pub struct Game {
     title_angle: i32,
     /// drawing on a software renderer: no outlines, a shorter view, one mirror
     low: bool,
+    /// played on a touch screen: drawn at no more than `TOUCH_DPR_MOST`
+    touch: bool,
 }
 
 fn bit(bits: u32, b: u32) -> bool {
@@ -368,6 +381,7 @@ impl Game {
             pending_bits: 0,
             title_angle: 0,
             low: false,
+            touch: false,
         };
         g.scenery = g.build_scenery();
         g.reset();
@@ -414,10 +428,20 @@ impl Game {
     // ---- what the page calls ----
 
     pub fn resize(&mut self, css_w: i32, css_h: i32, dpr_pct: i32) -> [i32; 2] {
+        let dpr_pct = if self.touch {
+            dpr_pct.min(TOUCH_DPR_MOST)
+        } else {
+            dpr_pct
+        };
         self.width = (css_w * dpr_pct / 100).clamp(64, 4096);
         self.height = (css_h * dpr_pct / 100).clamp(64, 4096);
         self.frame();
         [self.width, self.height]
+    }
+
+    /// The page is played on a touch screen.
+    pub fn set_touch(&mut self, touch: bool) {
+        self.touch = touch;
     }
 
     /// The page's renderer draws in software: draw less.
@@ -466,6 +490,199 @@ impl Game {
             let k = (i as i32 % 7) - 3;
             self.city.loose(i, v3(k * ONE, int(2), -k * ONE), V3::ZERO);
         }
+    }
+
+    /// For filming (tools/film/): sets up a scene, as a person could have
+    /// played to it, from a JSON description. Every field is optional.
+    ///
+    /// - `walker`: [x, z, heading°, pitch°] in the house, before the chase
+    /// - `item`: the chase is on, with this item's pursuer, the house folded
+    /// - `seconds`: of the chase so far (the clock and the pursuer's pace)
+    /// - `abilities`: the car's, by id, in the order drawn
+    /// - `car`: [x, z, heading°, m/s]: you are driving there
+    /// - `monster`: [x, z], or `behind`: metres behind the car
+    /// - `jump_in`: seconds until the pursuer next jumps out in front
+    /// - `ravage`: [[x0, z0, x1, z1], …]: paths the pursuer has torn down
+    /// - `settle`: seconds the loosed city falls before the scene starts
+    pub fn stage(&mut self, spec: &str) -> Result<(), String> {
+        let s: serde_json::Value = serde_json::from_str(spec).map_err(|e| format!("stage: {e}"))?;
+        let num = |v: &serde_json::Value| -> Result<i32, String> { crate::monster::decimal(v) };
+        let list = |key: &str| -> Result<Vec<i32>, String> {
+            s.get(key)
+                .and_then(|v| v.as_array())
+                .map(|a| a.iter().map(num).collect())
+                .unwrap_or(Ok(Vec::new()))
+        };
+        self.reset();
+        self.mode = Mode::House;
+        self.paused = false;
+        let w = list("walker")?;
+        if w.len() == 4 {
+            let at = v3(w[0], house::FLOOR, w[1]);
+            self.walker = Walker::new(at, deg(w[2] / ONE), deg(w[3] / ONE));
+        }
+        if let Some(id) = s.get("item").and_then(|v| v.as_str()) {
+            let k = self
+                .items
+                .iter()
+                .position(|i| i.id == id)
+                .ok_or(format!("stage: no item {id}"))?;
+            self.held = Some(k);
+            self.unfold();
+            self.fold = house::FOLD_TICKS * 4;
+            let secs = s.get("seconds").map(num).transpose()?.unwrap_or(0) / ONE;
+            self.ticks = secs as u32 * 60;
+            self.unlocked = self.upgrades.at.iter().filter(|&&a| a <= secs).count();
+            if let Some(m) = self.monster.as_mut() {
+                m.age += self.ticks as i32 + m.tune.rise_ticks + m.tune.wait_ticks;
+            }
+        }
+        let c = list("car")?;
+        if c.len() == 4 {
+            let at = v3(c[0], self.terrain.height(c[0], c[1]) + ONE, c[1]);
+            self.car = Car::new(at, deg(c[2] / ONE));
+            self.car.body.vel = self.car.fwd().scale(c[3]);
+            self.driving = true;
+            self.walker.pos = at;
+        }
+        for id in s
+            .get("abilities")
+            .and_then(|v| v.as_array())
+            .into_iter()
+            .flatten()
+        {
+            let id = id.as_str().unwrap_or("");
+            let k = (0..self.upgrades.pool.len())
+                .find(|k| self.upgrades.pool[*k].id == id && !self.drawn.contains(k))
+                .ok_or(format!("stage: no ability {id} left to draw"))?;
+            self.drawn.push(k);
+            let kit = &mut self.car.kit;
+            match id {
+                "big_wheels" => kit.big_wheels = true,
+                "wings" => kit.wings = true,
+                "turbo" => kit.turbo += 1,
+                "dash" => kit.dash = true,
+                "spin" => kit.spin = true,
+                "nitrous" => kit.nitrous = true,
+                "leap" => kit.leap = true,
+                _ => {}
+            }
+        }
+        let player = self.player_pos();
+        let fwd = self.car.fwd();
+        if let Some(m) = self.monster.as_mut() {
+            let mo = list("monster")?;
+            if mo.len() == 2 {
+                m.pos = v3(mo[0], 0, mo[1]);
+            }
+            if let Some(d) = s.get("behind").map(num).transpose()? {
+                m.pos = player.sub(v3(fwd.x, 0, fwd.z).norm().scale(d));
+            }
+            m.pos.y = self.terrain.height(m.pos.x, m.pos.z);
+            let to = player.sub(m.pos);
+            m.yaw = fx::atan2(-to.x, -to.z);
+            if let Some(j) = s.get("jump_in").map(num).transpose()? {
+                m.jump_in = fx::mul(j, 60).max(1);
+            }
+        }
+        for path in s.get("ravage").and_then(|v| v.as_array()).into_iter().flatten() {
+            let p: Vec<i32> = path
+                .as_array()
+                .ok_or("stage: a ravage path is [x0, z0, x1, z1]")?
+                .iter()
+                .map(num)
+                .collect::<Result<_, _>>()?;
+            let (a, b) = (v3(p[0], 0, p[1]), v3(p[2], 0, p[3]));
+            let along = b.sub(a);
+            let fwd = along.norm();
+            let steps = along.len() / (2 * ONE);
+            for k in 0..=steps {
+                let at = a.add(fwd.scale(2 * ONE * k));
+                let at = v3(at.x, self.terrain.height(at.x, at.z), at.z);
+                self.city.sweep(
+                    at,
+                    fwd,
+                    self.tuning.width / 2,
+                    self.tuning.height,
+                    -ONE,
+                    int(4),
+                    int(25),
+                );
+            }
+        }
+        let settle = s.get("settle").map(num).transpose()?.unwrap_or(0);
+        for _ in 0..fx::mul(settle, 60) {
+            self.city.step(&self.terrain, DT, player);
+        }
+        self.city.bursts.clear();
+        self.clock = None;
+        if let Some(seed) = s.get("seed").and_then(|v| v.as_u64()) {
+            self.luck = Rng::new(seed);
+            self.rng = Rng::new(seed);
+        }
+        self.frame();
+        Ok(())
+    }
+
+    /// For filming: where things are, for the film's driver to steer by:
+    /// with `ahead`, how far is clear (m, up to 60) along rays from the car's
+    /// nose, 40° left to 40° right.
+    pub fn probe(&mut self) -> String {
+        let mut scratch = Vec::new();
+        let c = &self.car;
+        let nose = c.body.pos.add(c.fwd().scale(int(3)));
+        let flat = v3(c.fwd().x, 0, c.fwd().z).norm();
+        let ahead: Vec<i32> = [-40, -25, -12, 0, 12, 25, 40]
+            .iter()
+            .map(|&a| {
+                let d = Quat::yaw(-deg(a)).rotate(flat);
+                self.city
+                    .ray(nose, d, int(60), &mut scratch)
+                    .map(|h| h.0 / ONE)
+                    .unwrap_or(60)
+            })
+            .collect();
+        // where the pursuer's face shows in the rear-view mirror, in
+        // thousandths of the screen from its top left
+        let mirror_face = self.monster.as_ref().zip(self.views.get(1)).and_then(|(m, v)| {
+            let face = m.pos.add(V3::UP.scale(m.tune.height * 2 / 3));
+            let aspect = fx::div(v.rect[2].max(1), v.rect[3].max(1));
+            let (x, y) = v.cam.screen(aspect, face)?;
+            // the mirror shows its picture flipped left to right
+            let x = if v.mirror { int(100) - x } else { x };
+            let (w, h) = (self.width.max(1) as i64, self.height.max(1) as i64);
+            let sx = (v.rect[0] as i64 + x as i64 * v.rect[2] as i64 / int(100) as i64) * 1000 / w;
+            let top = h - v.rect[1] as i64 - v.rect[3] as i64;
+            let sy = (top + y as i64 * v.rect[3] as i64 / int(100) as i64) * 1000 / h;
+            Some([sx, sy])
+        });
+        let c = &self.car;
+        let f = c.fwd();
+        let deg_of = |a: i32| a as i64 * 360 / fx::TURN as i64;
+        let m = self.monster.as_ref();
+        let target = self.player_pos();
+        json!({
+            "mode": format!("{:?}", self.mode).to_lowercase(),
+            "driving": self.driving,
+            "ticks": self.ticks,
+            "car": [c.body.pos.x / ONE, c.body.pos.y / ONE, c.body.pos.z / ONE],
+            "heading": deg_of(fx::atan2(-f.x, -f.z)),
+            "speed": c.body.vel.len_xz() / ONE,
+            "up": c.up().y * 100 / ONE,
+            "grounded": c.grounded,
+            "walker": [self.walker.pos.x / ONE, self.walker.pos.z / ONE, deg_of(self.walker.yaw)],
+            "aim": self.aim.map(|k| self.items[k].id.clone()),
+            "held": self.held.map(|k| self.items[k].id.clone()),
+            "monster": m.map(|m| [m.pos.x / ONE, m.pos.z / ONE]),
+            "monster_distance": m.map(|m| m.distance(target) / ONE),
+            "monster_ahead": m.map(|m| m.pos.sub(target).dot(f) / ONE),
+            "jump_in": m.map(|m| m.jump_in),
+            "awake": self.city.awake_count(),
+            "intact": self.city.intact_count(),
+            "ahead": ahead,
+            "mirror_face": mirror_face,
+        })
+        .to_string()
     }
 
     pub fn saved(&self) -> String {
@@ -868,6 +1085,28 @@ impl Game {
         )
     }
 
+    /// Where the rear-view mirror looks, in the car's frame: back and a
+    /// little down, tilted up toward the pursuer's face when it is close
+    /// enough to fill the mirror with its legs.
+    fn rear_aim(&self) -> V3 {
+        let level = v3(0, -ONE / 18, ONE);
+        let Some(m) = self.monster.as_ref().filter(|_| self.driving) else {
+            return level;
+        };
+        let b = &self.car.body;
+        let eye = b.pos.add(from_local(&b.basis, REAR_EYE));
+        let face = m.pos.add(V3::UP.scale(m.tune.height * 2 / 3));
+        let to = crate::quat::to_local(&b.basis, face.sub(eye));
+        if to.z <= 0 {
+            return level;
+        }
+        let tilt = fx::atan2(to.y, to.z);
+        let tilt = if tilt > fx::HALF { tilt - fx::TURN } else { tilt };
+        // the face near the top of the mirror's picture, not in its middle
+        let tilt = (tilt - deg(9)).clamp(REAR_TILT_LEAST, REAR_TILT_MOST);
+        v3(0, fx::sin(tilt), fx::cos(tilt))
+    }
+
     fn mirror_cam(&self, at: V3, back: V3, fov: i32) -> Camera {
         let b = &self.car.body;
         Camera {
@@ -881,7 +1120,8 @@ impl Game {
     /// The views on screen: the windscreen, and the three mirrors in the car.
     fn layout(&mut self) -> Vec<View> {
         let (w, h) = (self.width, self.height);
-        let main_cam = self.camera();
+        let mut main_cam = self.camera();
+        main_cam.fov = render::tall_fov(main_cam.fov, w, h);
         let in_car = self.driving && self.mode == Mode::Chase;
         let mut views = vec![View {
             rect: [0, 0, w, h],
@@ -893,21 +1133,28 @@ impl Game {
         }];
         if in_car {
             let world_car = [true, true, false];
-            let rear = (w * 34 / 100, h * 12 / 100);
+            // held upright, a phone's mirrors are wider and shallower
+            let tall = h > w;
+            let rear = if tall {
+                (w * 64 / 100, h * 11 / 100)
+            } else {
+                (w * 34 / 100, h * 12 / 100)
+            };
             views.push(View {
                 rect: [(w - rear.0) / 2, h - h * 25 / 1000 - rear.1, rear.0, rear.1],
                 mirror: true,
-                cam: self.mirror_cam(
-                    v3(0, ONE * 88 / 100, ONE * 40 / 100),
-                    v3(0, -ONE / 18, ONE),
-                    deg(24),
-                ),
+                cam: self.mirror_cam(REAR_EYE, self.rear_aim(), deg(24)),
                 far: int(900),
                 ink: false,
                 layers: [true, false, false],
             });
-            let side = (w * 17 / 100, h * 13 / 100);
-            let top = h - h * 58 / 100 - side.1;
+            let (side, top) = if tall {
+                let side = (w * 27 / 100, h * 8 / 100);
+                (side, h - h * 30 / 100 - side.1)
+            } else {
+                let side = (w * 17 / 100, h * 13 / 100);
+                (side, h - h * 58 / 100 - side.1)
+            };
             views.push(View {
                 rect: [w * 2 / 100, top, side.0, side.1],
                 mirror: true,
@@ -1104,9 +1351,10 @@ impl Game {
             t: m.pos.add(up.scale(ht / 2)).add(V3::UP.scale(ONE / 2)),
         };
         b.sprite(&card, self.chosen.unwrap_or(0) as u32);
-        // the cardboard strut behind, once it stands
+        // the cardboard strut behind, once it stands: its tall end a metre
+        // behind the card, which in the card's own plane showed through it
         if m.rise() > ONE / 2 {
-            let strut = Affine::translate(m.pos.sub(fwd.scale(int(8))).add(V3::UP.scale(ht / 4)))
+            let strut = Affine::translate(m.pos.sub(fwd.scale(int(9))).add(V3::UP.scale(ht / 4)))
                 .then(&Affine {
                     c0: right,
                     c1: V3::UP,
@@ -1481,7 +1729,7 @@ impl Game {
         };
         let toast = self.toast.map(|(k, _)| {
             let u = k.map(|k| &self.upgrades.pool[k]).unwrap_or(&self.upgrades.start);
-            json!({ "name": u.name, "text": u.text })
+            json!({ "name": u.name, "text": u.text, "touch": u.touch.as_ref().unwrap_or(&u.text) })
         });
         // the next is a surprise: only when it comes is shown
         let next = (self.drawn.len() < self.upgrades.pool.len())
@@ -1835,6 +2083,71 @@ pub(crate) mod tests {
         let mut g = g;
         g.next_song();
         assert_eq!(g.tracks[g.song].id, "chiptune", "and the player stays on it");
+    }
+
+    #[test]
+    fn a_touch_screen_is_drawn_at_no_more_than_twice_its_css_size() {
+        let mut g = game();
+        assert_eq!(
+            g.resize(390, 844, 300),
+            [1170, 2532],
+            "a mouse and a 3x screen: all of it"
+        );
+        g.set_touch(true);
+        assert_eq!(g.resize(390, 844, 300), [780, 1688]);
+        assert_eq!(g.resize(390, 844, 100), [390, 844], "and a 1x screen as it is");
+    }
+
+    #[test]
+    fn a_staged_scene_puts_the_car_the_pursuer_and_the_abilities_where_it_says() {
+        let mut g = game();
+        g.stage(
+            r#"{"item": "vinyl", "seconds": 120, "abilities": ["wings", "dash"],
+                "car": [50, -300, 0, 30], "behind": 40, "jump_in": 2}"#,
+        )
+        .unwrap();
+        assert_eq!(g.mode(), Mode::Chase);
+        assert!(g.driving());
+        let p: serde_json::Value = serde_json::from_str(&g.probe()).unwrap();
+        assert_eq!(p["car"][0], 50);
+        assert_eq!(p["speed"], 30);
+        assert!(g.car().kit.wings && g.car().kit.dash && !g.car().kit.nitrous);
+        let m = g.monster.as_ref().unwrap();
+        assert_eq!(
+            (m.pos.x / ONE, m.pos.z / ONE),
+            (50, -260),
+            "40 m behind a car heading north"
+        );
+        assert_eq!(m.jump_in, 120);
+        assert_eq!(g.ticks, 120 * 60);
+        assert_eq!(g.unlocked, 4, "the draws at 25, 55, 85 and 120 s are past");
+        assert!(g.stage(r#"{"item": "nothing"}"#).is_err());
+    }
+
+    #[test]
+    fn a_ravaged_street_is_torn_down() {
+        let mut g = game();
+        let before = g.city.intact_count();
+        g.stage(r#"{"item": "vinyl", "ravage": [[50, -100, 50, -400]], "settle": 1}"#)
+            .unwrap();
+        assert!(
+            g.city.intact_count() < before - 200,
+            "{} of {before}",
+            g.city.intact_count()
+        );
+    }
+
+    #[test]
+    fn the_rear_view_mirror_tilts_up_to_the_pursuers_face_when_it_is_close() {
+        let mut g = game();
+        g.stage(r#"{"item": "vinyl", "seconds": 60, "car": [50, -300, 0, 0], "behind": 400}"#)
+            .unwrap();
+        let far = g.rear_aim();
+        g.stage(r#"{"item": "vinyl", "seconds": 60, "car": [50, -300, 0, 0], "behind": 30}"#)
+            .unwrap();
+        let near = g.rear_aim();
+        assert!(far.y < ONE / 10, "far off, it looks back level: {far:?}");
+        assert!(near.y > ONE / 3, "close, it looks up at the face: {near:?}");
     }
 
     #[test]

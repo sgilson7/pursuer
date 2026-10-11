@@ -1,0 +1,38 @@
+{
+  "_about": "The touch controls (web/touch.js). A thumb on the left of the screen (`stick_side` of its width) is a stick: dragged past `dead_zone` of `stick_radius` CSS pixels toward a side, it holds that direction's action. A drag on the right half looks around, `look_scale` mouse pixels for each finger pixel. `buttons` are always there while you play, on foot or in the car as `when` says; `abilities` maps each of the car's abilities, as the core lists them, to the action its button holds.",
+  "stick_radius": 56,
+  "dead_zone": 0.32,
+  "stick_side": 0.5,
+  "look_scale": 1.5,
+  "buttons": [
+    {
+      "id": "use",
+      "action": "use",
+      "when": "foot"
+    },
+    {
+      "id": "jump",
+      "action": "jump",
+      "when": "foot"
+    },
+    {
+      "id": "run",
+      "action": "shift",
+      "when": "foot"
+    },
+    {
+      "id": "brake",
+      "action": "shift",
+      "when": "car"
+    }
+  ],
+  "abilities": {
+    "flip": "flip",
+    "big_wheels": "big",
+    "wings": "fly",
+    "dash": "dash",
+    "spin": "spin",
+    "nitrous": "nitrous",
+    "leap": "jump"
+  }
+}

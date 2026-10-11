@@ -20,6 +20,8 @@
 - Abilities by time survived, one drawn at random at each of seven times (`data/upgrades.json`): big wheels (Q), wings (F), dash (C), instant turn (X), nitrous (V), leap (Space) and three turbos in order; R rolls the car over (4.1 s from roof to wheels); no fall damage.
 - The car rolls over in too hard a turn at speed. The pursuer speeds up to 75 m/s and, every 25 to 45 s, jumps to 120 m ahead of you.
 - Score: time survived, best kept in local storage.
+- Phones and tablets: touch controls (`web/touch.js`, `data/touch.json`): a stick, a look drag, and buttons for Grab, Run, Jump, Brake, Flip and each ability drawn; a pause button; words that name the buttons; no pointer lock; drawn at no more than 2x; a view that stays about 70° wide held upright, with the mirrors across the top; the rear-view mirror tilts up to the pursuer's face when it is close; the recording unlocked for iOS by the first tap. Checked in WebKit as an iPad Pro 11 and an iPhone 15 (`tools/mobile.py`, and `webkit-iphone` in the browser check); not on a real device.
+- Three TikTok shorts of Kanye West chasing a phone player, filmed from the real page by `tools/film/` (after Vagrancy's): `~/Movies/Pursuer/pursuer-mirror.mp4`, `pursuer-ruins.mp4`, `pursuer-whole_run.mp4`, with posting notes in `~/Movies/Pursuer/tiktok-post.txt`. Not posted.
 - Performance: 60 frames a second in Chromium on an Apple Silicon Mac during a chase and with the whole city loose (`MEASUREMENTS.md`).
 
 ## Not done, or done differently
@@ -33,7 +35,9 @@
 
 | Command | Result |
 | --- | --- |
-| `./scripts/check.sh` (three engines) | BUILDER CHECK PASSED: fmt, clippy, 89 core tests and 11 boundary tests (fourth round: random abilities, hover removed, faster flip), wasm build, import audit, browser check in Chromium, Firefox and WebKit |
+| `./scripts/check.sh` (four runs) | BUILDER CHECK PASSED: fmt, clippy, 94 core tests and 11 boundary tests (fifth round: touch controls, the tall view, the tilting mirror, staging for film), wasm build, import audit, browser check in Chromium, Firefox, WebKit and WebKit as an iPhone 15 played by touch |
+| `python tools/mobile.py OUT "iPad Pro 11" --landscape`, and `"iPhone 15"` both ways | screenshots of touch play in WebKit |
+| `python tools/film/shorts.py mirror|ruins|whole_run` | the three shorts in `~/Movies/Pursuer/` |
 | `cargo test --release -p pursuer_core --test perf_probe -- --ignored --nocapture` | see `MEASUREMENTS.md` |
 | `python3 tools/shots.py OUT drive|watch|everything` | screenshots and frame rates, Metal GPU |
 
@@ -43,4 +47,4 @@ The website page went live at 12:41 inside build `915132a3`, published by anothe
 
 ## Waiting on Sam
 
-See the worklist rows in `SECOND-ORDER.md` (T1 to T3): the feel numbers, the music and the characters, and the words.
+See the worklist rows in `SECOND-ORDER.md` (T1 to T3): the feel numbers, the music and the characters, and the words. T7: play it on a real iPad and iPhone. T8: whether and how to post the shorts.

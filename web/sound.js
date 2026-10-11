@@ -13,6 +13,10 @@ let muted = false;
 const lastAt = new Map();
 // the music: a recording on a loop, or the tune scheduled note by note
 const tune = { playing: null, audio: null, voices: [], drone: [], next: 0, index: 0, gain: null };
+// The one element every recording plays through. iOS lets an element play
+// only once a press has started it, and the chase music starts long after
+// any press, so the first press starts and stops this one (`wake`).
+let player = null;
 
 export function setup(sounds, musicData) {
   recipes = sounds;
@@ -34,6 +38,20 @@ export function wake() {
     noiseBuffer.copyToChannel(data, 0);
   }
   if (ctx.state === "suspended") ctx.resume().catch(() => {});
+  if (!player) {
+    player = new Audio();
+    const first = music.tracks.find((t) => t.file && t.present);
+    if (first) {
+      player.src = first.file;
+      player.muted = true;
+      player
+        .play()
+        .then(() => {
+          if (!tune.audio) player.pause();
+        })
+        .catch(() => {});
+    }
+  }
 }
 
 export function toggleMute() {
@@ -112,7 +130,9 @@ function note(freq, t, dur) {
 
 // A recording plays from its `start` and, at its end, from `start` again.
 function startRecording(track) {
-  const audio = new Audio(track.file);
+  const audio = player || new Audio();
+  audio.pause();
+  audio.src = track.file;
   audio.volume = music.volume;
   audio.muted = muted;
   audio.playbackRate = track.rate;
@@ -121,8 +141,9 @@ function startRecording(track) {
     audio.currentTime = track.start;
     audio.play().catch(() => {});
   };
-  audio.addEventListener("loadedmetadata", fromStart, { once: true });
-  audio.addEventListener("ended", fromStart);
+  // properties, not listeners: the element is reused, record after record
+  audio.onloadedmetadata = fromStart;
+  audio.onended = fromStart;
   tune.audio = audio;
 }
 
@@ -155,7 +176,8 @@ function stopMusic() {
   tune.playing = null;
   if (tune.audio) {
     tune.audio.pause();
-    tune.audio.removeAttribute("src");
+    tune.audio.onloadedmetadata = null;
+    tune.audio.onended = null;
     tune.audio = null;
   }
   for (const v of tune.voices.concat(tune.drone)) {

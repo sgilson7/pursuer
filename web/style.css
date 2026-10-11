@@ -139,3 +139,74 @@ table.controls td:first-child { font-weight: 700; white-space: nowrap; }
   0%, 100% { transform: translateY(0) rotate(-1.5deg); }
   50% { transform: translateY(-8px) rotate(1.5deg); }
 }
+
+/* ---- touch screens: a tablet or a phone ---- */
+html, body { touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent; overscroll-behavior: none; }
+canvas#view { height: 100dvh; width: 100dvw; }
+#touch, .touch-only, .touch-controls, .mobile-line { display: none; }
+body.touch #touch { display: block; position: absolute; inset: 0; }
+body.touch .touch-only { display: block; }
+body.touch .touch-controls { display: table; }
+body.touch table.controls:not(.touch-controls) { display: none; }
+.mobile-line { font-weight: 700; margin: 0.6em 0 0; }
+body.touch .mobile-line, .title-block .mobile-line { display: block; }
+#touch-pad { position: absolute; inset: 0; pointer-events: auto; touch-action: none; }
+#stick { position: absolute; left: calc(14vw + env(safe-area-inset-left)); top: 74%; width: 132px; height: 132px;
+  margin: -66px 0 0 -66px; border-radius: 50%; border: 4px solid rgba(59, 35, 64, 0.55);
+  background: rgba(246, 231, 196, 0.22); pointer-events: none; opacity: 0.55; transition: opacity 0.15s; }
+#stick.live { opacity: 1; }
+#stick-knob { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px;
+  border-radius: 50%; background: var(--paper); border: 4px solid var(--ink); box-shadow: 0 4px 0 var(--shadow); }
+#touch-buttons { position: absolute; right: calc(3vw + env(safe-area-inset-right)); bottom: calc(4vh + env(safe-area-inset-bottom));
+  display: flex; flex-wrap: wrap-reverse; flex-direction: row-reverse; justify-content: flex-start; gap: 10px;
+  width: min(46vw, 300px); pointer-events: none; }
+.touch-btn { pointer-events: auto; touch-action: none; position: relative; overflow: hidden; width: 78px; height: 78px;
+  padding: 0; border-radius: 50%; font-size: 0.85rem; font-weight: 800; line-height: 1.05;
+  background: rgba(246, 231, 196, 0.9); display: flex; align-items: center; justify-content: center; text-align: center; }
+.touch-btn span { position: relative; z-index: 1; padding: 0 4px; }
+/* an ability's button fills from the bottom as it charges */
+.touch-btn::before { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: var(--level, 100%);
+  background: var(--teal); opacity: 0.55; }
+.touch-btn[data-state="active"]::before { background: var(--gold); opacity: 0.9; }
+.touch-btn[data-state="charging"]::before { background: var(--sage); }
+.touch-btn:not([data-state])::before { display: none; }
+.touch-btn.down { transform: translateY(3px) scale(0.94); box-shadow: 0 1px 0 var(--ink); background: var(--gold); }
+.touch-btn[data-id="use"] { width: 96px; height: 96px; font-size: 1.05rem; background: var(--coral); color: #fff8ea; }
+body[data-where="car"] .touch-btn[data-when="foot"], body[data-where="foot"] .touch-btn[data-when="car"] { display: none; }
+#pause-btn { position: absolute; left: calc(2vw + env(safe-area-inset-left)); top: calc(2vh + env(safe-area-inset-top));
+  pointer-events: auto; padding: 0.2em 0.7em; font-weight: 900; }
+/* the touch buttons say what the HUD's ability list said */
+body.touch .ability { display: none; }
+body.touch #chase-right { min-width: 0; }
+
+/* a small screen: the title and the verdict as one column, the HUD smaller */
+@media (max-width: 900px), (max-height: 560px) {
+  .title-block, .caught-block { left: 50%; transform: translateX(-50%); top: max(3vh, env(safe-area-inset-top));
+    width: min(92vw, 440px); min-width: 0; max-height: 94dvh; overflow-y: auto; padding: 1em 1.2em; touch-action: pan-y; }
+  .title-block h1 { font-size: 3rem; }
+  .cutout { height: 50vh; right: 2vw; opacity: 0.9; }
+  #chase-top .clock { font-size: 1.8rem; }
+  #chase-left, #chase-right { padding: 0.3em 0.6em; }
+  #chase-left .dist, #chase-right .speed { font-size: 1.2rem; }
+  #toast { top: 24vh; font-size: 0.9rem; }
+  #toast .name { font-size: 1.2rem; }
+  #prompt { font-size: 0.95rem; white-space: normal; max-width: 86vw; text-align: center; }
+  .panel { padding: 1em 1.2em; max-height: 94dvh; overflow-y: auto; }
+}
+/* in play on a touch screen, the score boxes sit at the top, clear of the thumbs */
+body.touch #chase-left { top: calc(2vh + env(safe-area-inset-top)); bottom: auto; left: auto; right: calc(2vw + env(safe-area-inset-right)); }
+body.touch #chase-right { top: calc(2vh + env(safe-area-inset-top)); bottom: auto; right: auto; left: calc(14vw + env(safe-area-inset-left)); }
+/* a phone held upright: the mirrors run across the top (the core lays them out), so the boxes go under them */
+@media (orientation: portrait) {
+  body.touch #chase-top { top: 12.5vh; }
+  body.touch #chase-left { top: 39vh; right: 2vw; }
+  body.touch #chase-right { top: 39vh; left: 2vw; }
+  body.touch #pause-btn { top: auto; bottom: calc(1vh + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); }
+  body.touch #stick { left: 25vw; top: 80%; }
+  body.touch #touch-buttons { bottom: calc(5vh + env(safe-area-inset-bottom)); width: 52vw; }
+  body.touch .touch-btn { width: 70px; height: 70px; }
+  body.touch .touch-btn[data-id="use"] { width: 86px; height: 86px; }
+}
+/* on a touch screen the prompts sit high, clear of the thumbs and the buttons */
+body.touch #prompt, body.touch #prompt[data-kind="run"], body.touch #prompt[data-kind="enter"] { top: 27%; }

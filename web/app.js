@@ -5,6 +5,7 @@
 import init, { Game, numbers } from "./pkg/pursuer_shim.js";
 import { makeRenderer } from "./gl.js";
 import { makeInput } from "./input.js";
+import { makeTouch } from "./touch.js";
 import { makeHud } from "./hud.js";
 import { setup as setupSound, wake, toggleMute, play, musicOn } from "./sound.js";
 
@@ -38,7 +39,8 @@ function fillCopy(copy) {
   document.title = copy.title;
   el("build").textContent = BUILD;
   for (const table of document.querySelectorAll("table.controls")) {
-    for (const [keys, does] of copy.controls) {
+    const rows = table.classList.contains("touch-controls") ? copy.controls_touch : copy.controls;
+    for (const [keys, does] of rows) {
       const row = table.insertRow();
       row.insertCell().textContent = keys;
       row.insertCell().textContent = does;
@@ -56,11 +58,12 @@ function loadImage(src) {
 }
 
 async function start() {
-  const names = ["palette", "items", "upgrades", "pursuer", "copy", "controls", "sounds", "music", "display"];
+  const names = ["palette", "items", "upgrades", "pursuer", "copy", "controls", "sounds", "music", "display", "touch"];
   const texts = await Promise.all(
     names.map((n) => file(`data/${n}.json`)).concat([file("data/shaders/scene.vert"), file("data/shaders/scene.frag")]),
   );
-  const [palette, items, upgrades, pursuer, copyText, controlsText, soundsText, musicText, displayText, vertex, fragment] = texts;
+  const [palette, items, upgrades, pursuer, copyText, controlsText, soundsText, musicText, displayText, touchText, vertex, fragment] =
+    texts;
   const copy = JSON.parse(copyText);
   const display = JSON.parse(displayText);
   fillCopy(copy);
@@ -89,7 +92,8 @@ async function start() {
   game.set_low_detail(Boolean(renderer && renderer.software));
   const save = () => storage.save(game.saved());
   const input = makeInput(canvas, JSON.parse(controlsText), N.actions, () => wake());
-  const hud = makeHud(copy);
+  const touch = makeTouch(JSON.parse(touchText), N.actions, copy);
+  const hud = makeHud(copy, touch.on);
   let shownMode = null;
 
   const act = (fn) => () => {
@@ -97,7 +101,8 @@ async function start() {
     fn();
     if (document.activeElement) document.activeElement.blur();
   };
-  const engage = () => input.engage();
+  // a touch screen has no pointer to lock: it plays as soon as it is asked
+  const engage = () => input.engage(touch.on());
   el("begin").addEventListener(
     "click",
     act(() => {
@@ -122,6 +127,7 @@ async function start() {
     }),
   );
   el("to-title").addEventListener("click", act(() => game.to_title()));
+  el("pause-btn").addEventListener("click", act(() => game.pause()));
 
   // losing a pointer lock that was held pauses play
   let held = false;
@@ -143,6 +149,8 @@ async function start() {
 
   function resize() {
     const scale = renderer && renderer.software ? display.software_scale : 1;
+    // a film is drawn at the full resolution it is filmed at
+    game.set_touch(touch.on() && location.hash !== "#film");
     const [w, h] = game.resize(canvas.clientWidth, canvas.clientHeight, (window.devicePixelRatio || 1) * scale);
     if (renderer) renderer.resize(w, h);
   }
@@ -166,20 +174,25 @@ async function start() {
       el("c-art").src = `art/monsters/${h.monster_id}.png?v=${BUILD}`;
       save();
     }
-    if (h.mode === "title" || h.mode === "caught" || h.mode === "paused") input.release();
+    if (h.mode === "title" || h.mode === "caught" || h.mode === "paused") {
+      input.release();
+      touch.release();
+    }
     shownMode = h.mode;
   }
 
   let piecesVersion = null;
   let sceneSet = false;
-  function frame(now) {
-    const { bits, dx, dy } = input.read();
+  // One display frame: the clock and the actions in, the picture out.
+  function step(now, bits, dx, dy, film) {
     game.advance(now, bits, dx, dy);
     const h = JSON.parse(game.hud());
     showMode(h);
     if (h.mode === "house" || h.mode === "chase") {
       hud.update(h);
-      el("engage").hidden = input.engaged();
+      touch.update(h);
+      touch.show(bits, film);
+      el("engage").hidden = film || input.engaged();
     }
     for (const s of h.sounds) play(s);
     musicOn(h.music, h.song_id);
@@ -200,7 +213,39 @@ async function start() {
       }
       renderer.frame(game.rects(), game.mats(), game.draws(), game.dynamic());
     }
+    return h;
+  }
+
+  function frame(now) {
+    const keys = input.read();
+    const thumbs = touch.read();
+    step(now, keys.bits | thumbs.bits, keys.dx + thumbs.dx, keys.dy + thumbs.dy, false);
     requestAnimationFrame(frame);
+  }
+
+  // #film: tools/film/ drives the page a frame at a time on its own clock,
+  // as a person would have played it, and films each frame (no loop runs).
+  if (location.hash === "#film") {
+    let clock = 0;
+    touch.turnOn();
+    window.film = {
+      stage: (spec) => game.stage(JSON.stringify(spec)),
+      probe: () => JSON.parse(game.probe()),
+      // `ms`: the time the frame stands for, in milliseconds
+      step(bits, dx, dy, ms) {
+        clock += ms;
+        const h = step(clock, bits | N.actions.focus, dx, dy, true);
+        // where a thumb is on the screen: each button pressed, and the stick
+        const touches = [...document.querySelectorAll(".touch-btn.down, #stick.live #stick-knob")].map((n) => {
+          const r = n.getBoundingClientRect();
+          return [r.left, r.top, r.width, r.height];
+        });
+        return { hud: h, probe: JSON.parse(game.probe()), touches };
+      },
+      actions: N.actions,
+    };
+    document.body.dataset.ready = "true";
+    return;
   }
 
   // #everything knocks the whole city loose at once: the worst case

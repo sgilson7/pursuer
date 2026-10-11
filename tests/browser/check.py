@@ -36,7 +36,10 @@ from playwright.sync_api import sync_playwright
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 DIST = ROOT / "dist"
-ENGINES = os.environ.get("BUILDER_ENGINES", "chromium firefox webkit").split()
+# `webkit-iphone` is WebKit as an iPhone (touch, its screen and pixel ratio),
+# played through the touch controls (interactions.run_touch).
+ENGINES = os.environ.get("BUILDER_ENGINES", "chromium firefox webkit webkit-iphone").split()
+PHONE = "iPhone 15"
 IDLE_MS = int(float(os.environ.get("BUILDER_IDLE", "10")) * 1000)
 
 failures = []
@@ -84,8 +87,9 @@ def run_engine(p, engine, base, interactions):
     def same_origin(url):
         return url.startswith(origin + "/") or url.startswith("blob:" + origin) or url.startswith("data:")
 
-    browser = getattr(p, engine).launch()
-    context = browser.new_context(accept_downloads=True)
+    phone = engine.endswith("-iphone")
+    browser = getattr(p, engine.split("-")[0]).launch()
+    context = browser.new_context(accept_downloads=True, **(p.devices[PHONE] if phone else {}))
     context.on("request", lambda r: None if same_origin(r.url) else seen["foreign"].append(r.url))
 
     def route(r):
@@ -115,7 +119,7 @@ def run_engine(p, engine, base, interactions):
     page.wait_for_timeout(IDLE_MS)
     check(not seen["foreign"], f"no off-origin request during load and {IDLE_MS // 1000}s idle {seen['foreign']}")
 
-    interactions.run(page, check, engine)
+    (interactions.run_touch if phone else interactions.run)(page, check, engine)
 
     csp = page.evaluate("() => window.__builderCsp || []")
     check(not csp, f"no Content-Security-Policy violation {csp}")

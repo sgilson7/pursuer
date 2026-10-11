@@ -3,7 +3,9 @@
 
 const el = (id) => document.getElementById(id);
 
-export function makeHud(copy) {
+export function makeHud(copy, touching) {
+  // a touch screen's words name its buttons, not keys
+  const say = (key) => (touching() && copy[`${key}_touch`]) || copy[key];
   const fill = (template, item) => template.replace("{item}", item || "");
   const abilities = el("abilities");
   const rows = new Map();
@@ -57,7 +59,7 @@ export function makeHud(copy) {
       el("dread").style.opacity = h.dread;
       el("danger").style.opacity = h.danger;
       const prompt = el("prompt");
-      const words = h.prompt ? fill(copy[`prompt_${h.prompt}`], h.held || h.aim) : "";
+      const words = h.prompt ? fill(say(`prompt_${h.prompt}`), h.held || h.aim) : "";
       prompt.hidden = !words;
       prompt.textContent = words;
       prompt.dataset.kind = h.prompt;
@@ -97,9 +99,11 @@ export function makeHud(copy) {
       toast.hidden = !h.toast;
       if (h.toast) {
         el("t-name").textContent = h.toast.name;
-        el("t-text").textContent = h.toast.text;
+        el("t-text").textContent = touching() ? h.toast.touch : h.toast.text;
       }
       el("flipnote").hidden = !h.upside_down;
+      el("flipnote").textContent = say("flip_hint");
+      el("engage-btn").textContent = say("click_to_play");
     },
   };
 }
