@@ -126,60 +126,61 @@ def mirror(sc):
 
 def ravaged_town():
     """Kanye's trail through most of the town: through the middle of every
-    block, both ways, leaving the avenue at x = 150 standing in ruins."""
+    block both ways, stopping short of the overpass (z = 120) on either side
+    and walking away from it, so what he throws forward lands away from it
+    and the deck stands over the ruins."""
     paths = []
-    # across the town from beside the avenue outward, so what he throws
-    # forward lands away from it
-    for z in (240, 80, -80, -240, -400):
-        paths += [[95, z, -480, z], [205, z, 480, z]]
-    for x in (-300, -100, 100, 200, 300):
-        paths.append([x, 480, x, -480] if x % 200 else [x, -480, x, 480])
+    for z in (360, 240, 40, -80, -240, -400):
+        paths.append([-480, z, 480, z] if z % 160 else [480, z, -480, z])
+    for x in (-400, -300, -200, -100, 0, 100, 200, 300, 400):
+        paths += [[x, 98, x, -480], [x, 142, x, 480]]
     return paths
 
 
 def ruins(sc):
     s = sc.s
-    p = sc.stage({"item": "vinyl", "seconds": 200, "abilities": ["spin", "dash", "turbo"], "car": [150, 60, 0, 30],
-                  "monster": [-420, 450], "jump_in": 2.45, "ravage": ravaged_town(), "settle": 8, "seed": 9}, "drive")
+    # east of the overpass on its street, heading west for the ramp; he is
+    # far off, and jumps out in front as the car crosses the deck
+    p = sc.stage({"item": "vinyl", "seconds": 140, "abilities": ["spin", "dash", "turbo"], "car": [478, 120, 90, 26],
+                  "monster": [-420, 450], "jump_in": 6.5, "ravage": ravaged_town(), "settle": 8, "seed": 9}, "drive")
     log(p, "staged", sc.take.state["intact"])
-    k = 0
-    # weave north up the avenue through what is left
-    for k in range(400):
+    west = lambda: steer(s, sc.take.state, sc.take.state["car"][0] - 60, 120, slack=3)  # noqa: E731
+    # up the ramp with the ruins on both sides: a look left across them, and back
+    last = p["monster_distance"]
+    for k in range(600):
         p = sc.take.state
-        if p["mode"] != "chase" or (p["monster_ahead"] or 0) > 0 and (p["monster_distance"] or 999) < 160:
+        # a jump: from far off to just ahead in one frame
+        if p["mode"] != "chase" or last - p["monster_distance"] > 100:
             break
-        # north, and back toward the avenue's middle when off it
-        goal = max(-30, min(30, (p["car"][0] - 150) * 1.5))
-        bits = weave(s, p, goal)
-        # the hook: a look left across the ruins, right, and back to the road
-        dx = -36 if k < 20 else 36 if k < 58 else -36 if k < 76 else 0
-        p = sc.frame(bits, dx=dx, captions=[("Kanye destroyed the whole town", "hook"), TAG] if k < 76 else [("I just have to get out", "beat"), TAG])
+        last = p["monster_distance"]
+        dx = -40 if k < 18 else 40 if k < 36 else 0
+        cap = [("Kanye destroyed the whole town", "hook"), TAG] if k < 80 else [("I just have to get out", "beat"), TAG]
+        # the long run along the deck, quicker: every other frame
+        p = sc.frame(west(), dx=dx, shoot=k < 90 or k % 2 == 0, captions=cap)
         if sc.dry and k % 15 == 0:
-            log(p, "weave", p["ahead"])
-    log(p, "he jumped")
-    # he is in the road ahead: the flash, then slow motion while he stands
-    jump = [("HE'S IN FRONT OF ME", "beat"), TAG]
+            log(p, "deck")
+    log(p, "he jumped", p["monster"])
+    # he stands up through the overpass ahead: full speed while he rises, then slow
+    jump = [("HE'S IN FRONT OF ME", "low"), TAG]
     for k in range(36):
-        # and up, at his face, over the roof
-        p = sc.frame(weave(s, sc.take.state, 0), dy=-34 if k < 10 else -1, speed=0.3, captions=jump, flash=max(0, 0.9 - k / 8), shake=max(0, 1 - k / 20),
+        p = sc.frame(west(), speed=1 if k < 10 else 0.3, captions=jump, flash=max(0, 0.9 - k / 8), shake=max(0, 1 - k / 20),
                      hit=True if k == 0 else None, zoom=(180, 300, 1.25 - 0.25 * k / 36))
-    log(p, "saw him")
-    # brake hard, turn round on the spot, and floor it
+    log(p, "saw him", p["monster"])
+    # brake hard, turn round on the spot, and floor it back east
     for k in range(10):
         p = sc.frame(s.bits("back", "shift"), captions=[("TURN AROUND", "beat"), TAG])
     p = sc.frame(s.bits("spin"), captions=[("TURN AROUND", "beat"), TAG], hit=True, whoosh=True, shake=0.6)
     log(p, "turned")
-    for k in range(240):
+    for k in range(300):
         p = sc.take.state
         if p["mode"] != "chase":
             break
         close = (p["monster_distance"] or 999) < 70
-        p = sc.frame(weave(s, p, 180), inset=mirror_box(sc.take.state) if close else None,
+        p = sc.frame(steer(s, p, p["car"][0] + 60, 120, slack=3), inset=mirror_box(p) if close else None,
                      captions=[("TOO SLOW", "hook"), TAG] if close else [("GO GO GO", "beat"), TAG])
         if sc.dry and k % 10 == 0:
             log(p, "flee")
     log(p, "caught?")
-    # the verdict, and the end card over it
     for k in range(50):
         p = sc.frame(0, hit=True if k == 0 else None, flash=0.8 if k == 0 else 0, shake=max(0, 0.8 - k / 10))
     for k in range(66):

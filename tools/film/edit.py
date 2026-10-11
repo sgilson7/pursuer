@@ -14,7 +14,9 @@ does to it:
   across its middle, over a dimmed copy: the rear-view mirror's close-up
 - `dim`: 0..1, the frame darkened, under an end card
 - `caption`: [text, style] burned in: style `hook` (big, high), `beat`
-  (big, middle), `small` (a smaller line under it), `end` (the end card)
+  (big, middle), `low` (big, over the dashboard, clear of what is ahead),
+  `small` (a smaller line under it), `under` (under a mirror close-up),
+  `end` (the end card), `tag` (the small line at the top)
 - `hit`: an impact on the sound track on this frame (`soft` for a lighter one)
 - `whoosh`: a rush of air on this frame
 
@@ -64,7 +66,7 @@ def caption(img, text, style, age):
     outline, popping in over its first few frames."""
     d = ImageDraw.Draw(img)
     size, y, fill = {"hook": (92, 0.30, PAPER), "beat": (104, 0.44, GOLD), "small": (54, 0.53, PAPER),
-                     "end": (78, 0.36, PAPER), "tag": (40, 0.035, PAPER), "under": (54, 0.68, PAPER)}[style]
+                     "end": (78, 0.36, PAPER), "tag": (40, 0.035, PAPER), "under": (54, 0.68, PAPER), "low": (100, 0.62, GOLD)}[style]
     pop = min(1.0, age / 4)
     size = int(size * (0.75 + 0.25 * pop + 0.12 * math.sin(pop * math.pi)))
     font = _font(BOLD, size)
