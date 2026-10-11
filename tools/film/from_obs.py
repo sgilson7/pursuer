@@ -11,6 +11,7 @@ The plan (times are seconds in the recording):
     {"source": "recording60.mp4",          # relative to the plan's folder
      "box": [x0, y0, x1, y1],               # the game's picture; found when left out
      "tag": true, "end": true,
+     "tag_seconds": 4,                      # the phone line only this long at the start (and on the end card)
      "clips": [
        {"from": 68.3, "to": 70.8,
         "speed": 0.5,                       # slow motion (sound slowed with it)
@@ -88,14 +89,29 @@ def to_916(box):
     return int(x0), int(y0), int(x1), int(y1)
 
 
-def clip_frames(src, box, t0, t1):
-    """The clip's frames, cropped and filled to 1080 x 1920, at the source's rate."""
-    x0, y0, x1, y1 = box
-    vf = f"crop={x1 - x0}:{y1 - y0}:{x0}:{y0},scale={W}:{H}:flags=lanczos"
-    raw = subprocess.run([FF, "-loglevel", "error", "-ss", f"{t0:.3f}", "-i", str(src), "-t", f"{t1 - t0:.3f}", "-vf", vf,
-                          "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], capture_output=True, check=True).stdout
-    n = len(raw) // (W * H * 3)
-    return [raw[k * W * H * 3 : (k + 1) * W * H * 3] for k in range(n)]
+class ClipFrames:
+    """The clip's frames, cropped and filled to 1080 x 1920, read in order as
+    they are asked for (a long clip does not fit in memory)."""
+
+    def __init__(self, src, box, t0, t1):
+        x0, y0, x1, y1 = box
+        vf = f"crop={x1 - x0}:{y1 - y0}:{x0}:{y0},scale={W}:{H}:flags=lanczos"
+        self.p = subprocess.Popen([FF, "-loglevel", "error", "-ss", f"{t0:.3f}", "-i", str(src), "-t", f"{t1 - t0:.3f}", "-vf", vf,
+                                   "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], stdout=subprocess.PIPE)
+        self.have, self.frame = -1, None
+
+    def get(self, idx):
+        while self.have < idx:
+            buf = self.p.stdout.read(W * H * 3)
+            if len(buf) < W * H * 3:
+                break
+            self.frame, self.have = buf, self.have + 1
+        return self.frame
+
+    def close(self):
+        self.p.stdout.close()
+        self.p.kill()
+        self.p.wait()
 
 
 def punch(img, z, at, jx=0.0, jy=0.0):
@@ -133,7 +149,7 @@ def main():
     hits, shown, age, n_out, last = [], None, 0, 0, None
     for clip in plan["clips"]:
         t0, t1, speed = clip["from"], clip["to"], clip.get("speed", 1.0)
-        frames = clip_frames(src, box, t0, t1)
+        frames = ClipFrames(src, box, t0, t1)
         count = max(1, round((t1 - t0) / speed * FPS))
         z0, z1 = clip.get("punch", [1.0, 1.0])
         at = clip.get("at", [0.5, 0.5])
@@ -141,8 +157,7 @@ def main():
             hits.append((n_out / FPS, 0.4 if clip["hit"] == "soft" else 1.0))
         for k in range(count):
             t = k / FPS * speed
-            idx = min(len(frames) - 1, int(t * src_fps))
-            img = Image.frombytes("RGB", (W, H), frames[idx])
+            img = Image.frombytes("RGB", (W, H), frames.get(int(t * src_fps)))
             last = img
             f = k / max(1, count - 1)
             # ease the punch-in
@@ -153,7 +168,7 @@ def main():
             if clip.get("flash") and k < 6:
                 img = Image.blend(img, Image.new("RGB", (W, H), (255, 255, 255)), 0.85 * (1 - k / 6))
             on = [tuple(c) for c in clip.get("caps", [])]
-            if plan.get("tag", True):
+            if plan.get("tag", True) and n_out / FPS < plan.get("tag_seconds", 1e9):
                 on.append((TAG, "tag"))
             key = json.dumps(on)
             age = age + 1 if key == shown else 0
@@ -162,6 +177,7 @@ def main():
                 caption(img, text, style, age)
             enc.stdin.write(img.tobytes())
             n_out += 1
+        frames.close()
     end_frames = 0
     if plan.get("end", True) and last is not None:
         end_frames = int(END_SECONDS * FPS)
@@ -170,6 +186,8 @@ def main():
             caption(img, END[0], "beat", k)
             caption(img, END[1], "small", k)
             caption(img, END[2], "under", k)
+            if plan.get("tag", True):
+                caption(img, TAG, "tag", k)
             enc.stdin.write(img.tobytes())
     enc.stdin.close()
     enc.wait()
